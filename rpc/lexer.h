@@ -41,8 +41,8 @@ typedef enum {
  * Represents a single token.
  */
 typedef struct {
+    
     TokenType type;
-
     /*
      * Pointer to the beginning of the token
      * inside the original source string.
@@ -70,7 +70,6 @@ typedef struct {
     char curr_char;
     int index;
     int line;
-
 } Lexer;
 
 
@@ -104,6 +103,7 @@ void skip_whitespace_and_comments(Lexer *lexer);
  */
 Token get_next_token(Lexer *lexer);
 
+int is_keyword(const char *start, int length, const char *keyword);
 
 /*
  * Display a token for debugging.

@@ -1,0 +1,14 @@
+// this is the simple test code snippet
+// Service
+// └── MathService
+//     └── Method
+//         ├── isPrime
+//         ├── Parameter
+//         │   ├── int32
+//         │   └── number
+//         └── Return Type
+//             └── bool
+    
+service MathService {
+    rpc isPrime(int32 number) returns (bool);
+}

@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "logger.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -103,6 +104,7 @@ Token get_single_char_token(Lexer *lexer, const char *start, int line, TokenType
     return (Token) {token_type, start, length, line};
 }
 
+// I could also store the Token_Name if i want to
 Token get_next_token(Lexer *lexer)
 {
     skip_whitespace_and_comments(lexer); // skipping
@@ -161,6 +163,7 @@ void display_token(Token token)
         "COMMA",
         "SEMICOLON"
     };
-    printf("[Line %d] Type: %-10s | Value: \"%.*s\"\n", 
-           token.line, type_names[token.type], token.length, token.start);
+    // why is this not working
+    log_info("[Line: %d] Type: %-10s | Value: \"%.*s\"\n", 
+             token.line, type_names[token.type], token.length, token.start);
 }
