@@ -10,5 +10,5 @@
 //             └── bool
     
 service MathService {
-    rpc isPrime(int32 number) returns (bool);
+    rpc isPrime(int32 number, int32 another_number) returns (bool);
 }

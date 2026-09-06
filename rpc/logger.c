@@ -6,6 +6,7 @@ static LogLevel current_level = LOG_TRACE;
 static int is_quiet = 0;
 
 // Text representations for log levels
+// LEFTEST includes every thing till that level
 static const char *level_strings[] = {
     "TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"
 };

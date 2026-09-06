@@ -149,21 +149,30 @@ void display_token(Token token)
         "KEYWORD",
         "IDENTIFIER",
         "NUMBER",
-        "OPERATOR",
         "EOF",
         "ERROR",
+
+        // Operators
         "PLUS",
         "MINUS",
+
+        // Parentheses
         "LPAREN",
         "RPAREN",
+
+        // Braces
         "LBRACE",
         "RBRACE",
+
+        // Brackets
         "LBRACKET",
         "RBRACKET",
+
+        // Separators
         "COMMA",
         "SEMICOLON"
     };
     // why is this not working
-    log_info("[Line: %d] Type: %-10s | Value: \"%.*s\"\n", 
+    log_info("[Line: %d] Type: %-10s | Value: \"%.*s\"", 
              token.line, type_names[token.type], token.length, token.start);
 }

@@ -10,16 +10,16 @@ typedef struct {
 } Parser;
 
 typedef struct {
-    char *name;
-    char *type;
+    Token type;
+    Token name;
 } Parameter;
 
 // method will have number of args 
 typedef struct {
-    char *name;
+    Token name;
     Parameter *parameters;
     int parameter_count;
-    char *return_type;
+    Token return_type;
 } Method;
 
 // so there is going to be Service
@@ -51,8 +51,9 @@ char *read_whole_file_in_buffer()
         return NULL;
     }
 
-    size_t bytesRead = fread(buff, 1, file_size, file);
-    if (bytesRead > 0) return buff;
+    size_t bytes_read = fread(buff, 1, file_size, file);
+    buff[bytes_read] = '\0';
+    if (bytes_read > 0) return buff;
     return NULL;
 }
 
@@ -70,7 +71,7 @@ void advance_token(Parser *parser)
 void consume_token(Parser *parser, TokenType expected)
 {
     if (parser->curr_token.type != expected) {
-        fprintf(stderr, "Syntax error on line %d\n", parser->curr_token.line);
+        log_error("Failed: Did not expected following token");
         exit(1);
     }
     advance_token(parser);
@@ -79,7 +80,8 @@ void consume_token(Parser *parser, TokenType expected)
 void consume_keyword(Parser *parser, char *keyword)
 {
     if (!is_keyword(parser->curr_token.start, parser->curr_token.length, keyword)) {
-        log_error("Failed due to syntax error");
+        log_error("Failed due to syntax error: expected %s, got %.*s", keyword, parser->curr_token.length,
+                  parser->curr_token.start);
         exit(1);
     }
     advance_token(parser);
@@ -91,19 +93,72 @@ int is_current(Parser *parser, TokenType token_type)
     return parser->curr_token.type == token_type;
 }
 
-Method* parse_method(Parser *parser)
+// rpc isPrime(int32 number) returns (bool);
+// (int32 number)
+Parameter *parse_parameter(Parser *parser)
 {
-    consume_keyword(parser, "rpc");
+    log_info("Parsing the parameter");
+    Parameter *parameter = malloc(sizeof(Parameter));
+    
+    parameter->type =  parser->curr_token;
+    consume_token(parser, TOKEN_KEYWORD);
+    
+    parameter->name = parser->curr_token;
+    consume_token(parser, TOKEN_IDENTIFIER);
+    
+    return parameter;
 }
 
-Method* parse_methods(Parser *parser)
+Parameter *parse_parameters(Parser *parser)
 {
-    consume_token(parser, TOKEN_LBRACE); // the first thing is the '{'
-    // why is this not working as expected
+    log_info("Parsing the parameters");
+    consume_token(parser, TOKEN_LPAREN);
+    while (!is_current(parser, TOKEN_RPAREN)) {
+        Parameter *parameter = parse_parameter(parser);
+        // For now just inspect it
+        display_token(parameter->type);
+        display_token(parameter->name);
+
+        if (is_current(parser, TOKEN_COMMA)) {
+            consume_token(parser, TOKEN_COMMA);
+        }
+    }
+    consume_token(parser, TOKEN_RPAREN);
+}
+
+Method* parse_method(Parser *parser)
+{
+    log_info("Parsing the method");
+    Method *method = malloc(sizeof(Method));
+    consume_keyword(parser, "rpc");
+
+    log_info("copying the method_name");
+    method->name = parser->curr_token;
+    consume_token(parser, TOKEN_IDENTIFIER);
+
+    method->parameters = parse_parameters(parser);
+    
+    // returns
+    consume_keyword(parser, "returns");
+
+    consume_token(parser, TOKEN_LPAREN);
+    method->return_type = parser->curr_token;
+    consume_token(parser, TOKEN_KEYWORD);
+    consume_token(parser, TOKEN_RPAREN);
+    consume_token(parser, TOKEN_SEMICOLON);
+
+    return method;
+}
+
+Method *parse_methods(Parser *parser)
+{
+    log_info("Parsing the methods");
+    consume_token(parser, TOKEN_LBRACE);
     while (!is_current(parser, TOKEN_RBRACE)) {
         Method *method = parse_method(parser);
-        advance_token(parser);
     }
+    consume_token(parser, TOKEN_RBRACE);
+    return NULL; // temporary
 }
 
 // this method is going to parse the whole service
@@ -113,7 +168,7 @@ Service* parse_service(Parser* parser)
     consume_keyword(parser, "service"); // now with this method we could consume any keyword
     service->name = service->name;
     consume_token(parser, TOKEN_IDENTIFIER); // we consume the identifier
-    Method *methods = parse_methods(parser);
+    service->methods = parse_methods(parser);
     return service;
 }
 
@@ -124,14 +179,13 @@ int main()
     char *buff = read_whole_file_in_buffer(); // reading whole file in the buffer
     Lexer lexer;
     init_lexer(&lexer, buff);
+    logger_set_level(LOG_INFO);
     
     Token token;
     Parser parser;
-    init_parser(&parser, &lexer);
-    Token curr;
-    while ((curr = get_next_token(&lexer)).type != TOKEN_EOF) {
-        display_token(curr);
-    }
+    init_parser(&parser, &lexer); // intializing the parser
+    Service *service = parse_service(&parser);
+    // now if we could display service;
     
     return 0;
 }
