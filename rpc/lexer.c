@@ -1,40 +1,8 @@
+#include "lexer.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
-
-typedef enum {
-    TOKEN_KEYWORD,
-    TOKEN_IDENTIFIER,
-    TOKEN_NUMBER,
-    TOKEN_OPERATOR,
-    TOKEN_EOF,
-    TOKEN_ERROR,
-    
-    // New Brackets and Braces
-    TOKEN_LPAREN,   // (
-    TOKEN_RPAREN,   // )
-    TOKEN_LBRACE,   // {
-    TOKEN_RBRACE,   // }
-    TOKEN_LBRACKET, // [
-    TOKEN_RBRACKET, // ]
-
-} TokenType;
-
-// main token object
-typedef struct {
-    TokenType type;
-    const char* start;
-    int length;       
-    int line;         
-} Token;
-
-typedef struct {
-    const char *source;
-    char curr_char;
-    int index;
-    int line;
-} Lexer;
 
 // helper methods
 void init_lexer(Lexer *lexer, const char *source)
@@ -105,8 +73,9 @@ Token read_identifier_or_keyword(Lexer *lexer)
     int length = (int)(&lexer->source[lexer->index] - start);
 
     // now checking if it is the identifier or keyword
-    if (is_keyword(start, length, "int") || is_keyword(start, length, "return") || 
-        is_keyword(start, length, "if")  || is_keyword(start, length, "else")) {
+    if (is_keyword(start, length, "service") || is_keyword(start, length, "rpc") || 
+        is_keyword(start, length, "returns") || is_keyword(start, length, "int32")
+        || is_keyword(start, length, "bool")) {
         return (Token){TOKEN_KEYWORD, start, length, line};
     }
 
@@ -127,7 +96,7 @@ Token read_number(Lexer *lexer)
     return (Token) {TOKEN_NUMBER, start, length, line};
 }
 
-Token get_single_char_token(Lexer *lexer, char *start, int line, TokenType token_type)
+Token get_single_char_token(Lexer *lexer, const char *start, int line, TokenType token_type)
 {
     advance(lexer);
     int length = (int)(&lexer->source[lexer->index] - start);
@@ -153,24 +122,19 @@ Token get_next_token(Lexer *lexer)
     }
 
     // Extract Multi-character and Single-character Operators
-    char c = lexer->
+    char c = lexer->curr_char;
     switch (c) {
+    case '+': return get_single_char_token(lexer, start, line, TOKEN_PLUS);
+    case '-': return get_single_char_token(lexer, start, line, TOKEN_MINUS);
     case '(': return get_single_char_token(lexer, start, line, TOKEN_LPAREN);
     case ')': return get_single_char_token(lexer, start, line, TOKEN_RPAREN);
     case '{': return get_single_char_token(lexer, start, line, TOKEN_LBRACE);
     case '}': return get_single_char_token(lexer, start, line, TOKEN_RBRACE);
     case '[': return get_single_char_token(lexer, start, line, TOKEN_LBRACKET);
     case ']': return get_single_char_token(lexer, start, line, TOKEN_RBRACKET);
+    case ',': return get_single_char_token(lexer, start, line, TOKEN_COMMA);
+    case ';': return get_single_char_token(lexer, start, line, TOKEN_SEMICOLON);
     }
-    
-    //    if (c == '+' || c == '-' || c == '*' || c == '/' || c == '=' || c == ';') {
-    //        advance(lexer);
-    //        if (c == '=' && lexer->curr_char == '=') {
-    //            advance(lexer);
-    //        }
-    //        int length = (int)(&lexer->source[lexer->index] - start);
-    //        return (Token) {TOKEN_OPERATOR, start, length, line};
-    //    }
 
     // Error Token Generation
     advance(lexer);
@@ -186,51 +150,17 @@ void display_token(Token token)
         "OPERATOR",
         "EOF",
         "ERROR",
+        "PLUS",
+        "MINUS",
         "LPAREN",
         "RPAREN",
         "LBRACE",
         "RBRACE",
         "LBRACKET",
-        "RBRACKET"
+        "RBRACKET",
+        "COMMA",
+        "SEMICOLON"
     };
     printf("[Line %d] Type: %-10s | Value: \"%.*s\"\n", 
            token.line, type_names[token.type], token.length, token.start);
-}
-
-FILE *open_file(const char *path)
-{
-    return fopen(path, "r");
-}
-
-int main()
-{
-    // now building reading the file
-    char *path = "./test.c";
-    FILE *file = open_file(path);
-    if (file == NULL) {
-        perror("Error");
-        return 1;
-    }
-
-    fseek(file, 0, SEEK_END);
-    int file_size = ftell(file);
-    rewind(file);
-
-    const char *buff = malloc(file_size * sizeof(char));
-    if (buff == NULL) {
-        perror("Error");
-        return 1;
-    }
-
-    size_t bytesRead = fread(buff, 1, file_size, file);
-
-    Lexer lexer;
-
-    init_lexer(&lexer, buff);
-    Token token;
-    while ((token = get_next_token(&lexer)).type != TOKEN_EOF) {
-        display_token(token);
-    }
-    
-    return 0;
 }
