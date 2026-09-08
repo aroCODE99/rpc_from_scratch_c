@@ -8,7 +8,7 @@
 // helper methods
 void init_lexer(Lexer *lexer, const char *source)
 {
-    printf("initializing the lexer\n");
+    log_info("initializing the lexer");
     lexer->source = source;
     lexer->curr_char = source[0];
     lexer->index = 0;

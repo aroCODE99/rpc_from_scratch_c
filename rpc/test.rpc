@@ -11,4 +11,5 @@
     
 service MathService {
     rpc isPrime(int32 number, int32 another_number) returns (bool);
+    rpc justInt(int32 number) returns(int32);
 }

@@ -1,9 +1,11 @@
 #include "lexer.h"
 #include "logger.h"
+#include "vector.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// i think this will require the vector implementation
 typedef struct {
     Lexer *lexer;
     Token curr_token;
@@ -14,21 +16,42 @@ typedef struct {
     Token name;
 } Parameter;
 
-// method will have number of args 
+// method will have number of args
+// now this is very similar to the
+// parameters
+//    ├── Parameter { type = "int",    name = "id" }
+//    └── Parameter { type = "string", name = "name" }
 typedef struct {
     Token name;
-    Parameter *parameters;
-    int parameter_count;
+    vector parameters;
     Token return_type;
 } Method;
 
 // so there is going to be Service
 // which will have multiple methods
+// above diagram goes for methods also
 typedef struct {
-    char *name;
-    Method *methods;
-    int method_count;
+    Token name;
+    vector methods;
 } Service;
+
+void display_service(Service *service)
+{
+    // just displaying the name
+    display_token(service->name);
+    // printing methods
+    for (int i = 0; i < service->methods.total; ++i) {
+        Method *curr_method = service->methods.items[i];
+        display_token(curr_method->name);
+        // displaying the parameter
+        for (int j = 0; j < curr_method->parameters.total; ++j) {
+            Parameter *curr_parameter = curr_method->parameters.items[j];
+            display_token(curr_parameter->name);
+            display_token(curr_parameter->type);
+        }
+        display_token(curr_method->return_type);
+    }
+}
 
 char *read_whole_file_in_buffer()
 {
@@ -87,19 +110,22 @@ void consume_keyword(Parser *parser, char *keyword)
     advance_token(parser);
 }
 
-// this method just checks if the the curr_token is the expected token
 int is_current(Parser *parser, TokenType token_type)
 {
     return parser->curr_token.type == token_type;
 }
 
-// rpc isPrime(int32 number) returns (bool);
-// (int32 number)
+// this will give use a one pair of parameter
+// (int32 number, int32 another_number) => int32 number
 Parameter *parse_parameter(Parser *parser)
 {
     log_info("Parsing the parameter");
     Parameter *parameter = malloc(sizeof(Parameter));
-    
+    if (parameter == NULL) {
+        log_error("Failed to allocate the memory");
+        exit(1);
+    }
+
     parameter->type =  parser->curr_token;
     consume_token(parser, TOKEN_KEYWORD);
     
@@ -109,16 +135,17 @@ Parameter *parse_parameter(Parser *parser)
     return parameter;
 }
 
-Parameter *parse_parameters(Parser *parser)
+void parse_parameters(Parser *parser, vector *parameters)
 {
     log_info("Parsing the parameters");
     consume_token(parser, TOKEN_LPAREN);
+
+    // adding the parameter to the parameters vector
     while (!is_current(parser, TOKEN_RPAREN)) {
         Parameter *parameter = parse_parameter(parser);
-        // For now just inspect it
-        display_token(parameter->type);
-        display_token(parameter->name);
+        vector_add(parameters, parameter);
 
+        // consuming the ','
         if (is_current(parser, TOKEN_COMMA)) {
             consume_token(parser, TOKEN_COMMA);
         }
@@ -128,15 +155,23 @@ Parameter *parse_parameters(Parser *parser)
 
 Method* parse_method(Parser *parser)
 {
+    // i really don't know what i am doing at this point
     log_info("Parsing the method");
+    // initializing the method struct
     Method *method = malloc(sizeof(Method));
+    if (method == NULL) {
+        log_error("Failed to allocate the memory");
+        exit(1);
+    }
+    vector_init(&method->parameters);
+    
     consume_keyword(parser, "rpc");
 
     log_info("copying the method_name");
     method->name = parser->curr_token;
     consume_token(parser, TOKEN_IDENTIFIER);
 
-    method->parameters = parse_parameters(parser);
+    parse_parameters(parser, &method->parameters);
     
     // returns
     consume_keyword(parser, "returns");
@@ -150,25 +185,67 @@ Method* parse_method(Parser *parser)
     return method;
 }
 
-Method *parse_methods(Parser *parser)
+// so this method is not returning anything
+// should this be taking the Service* as a parameter
+// now i am really confuse here like how should i be using this
+// like Method is list Method[] of methods
+void parse_methods(Parser *parser, vector *methods)
 {
     log_info("Parsing the methods");
     consume_token(parser, TOKEN_LBRACE);
+
+    // we are adding the method to the methods vector
     while (!is_current(parser, TOKEN_RBRACE)) {
         Method *method = parse_method(parser);
+        vector_add(methods, method);
     }
     consume_token(parser, TOKEN_RBRACE);
-    return NULL; // temporary
 }
 
 // this method is going to parse the whole service
 Service* parse_service(Parser* parser)
 {
+    // initializing service struct
+    log_info("parsing service");
     Service *service = malloc(sizeof(Service));
+
+    // I was doing this first
+    // VECTOR_INIT(vec);
+    // service->methods = &vec;
+    // but the vec is the local variable and it is gone with this function call
+    // method
+    // parse_method()
+    // │
+    // ├── vec        <-- local variable
+    // │
+    // └── return method
+    //        │
+    //        └── parameters ---> vec
+
+    // allocating the size for the methods
+    // so (vector *pointer) is very diff from the 
+    // vector *parameters
+    //        |
+    //        |-----> ????
+    // vector vec;
+    // this actually has everything in the struct
+    // vec
+    // +----------------+
+    // | items          |
+    // | cap            |
+    // | total          |
+    // +----------------+
+
+
+    // Instead of using the vector * using vector directly so we don't manage two heaps
+    // RULE: If the parent logically owns exactly one object and that object has the same lifetime as the parent,
+    // embedding the object is usually simpler.    vector_init(&service->methods);
+    
     consume_keyword(parser, "service"); // now with this method we could consume any keyword
-    service->name = service->name;
+    // what the f am i doing here
+    service->name = parser->curr_token; // storing the identifier token_name
     consume_token(parser, TOKEN_IDENTIFIER); // we consume the identifier
-    service->methods = parse_methods(parser);
+    parse_methods(parser, &service->methods);
     return service;
 }
 
@@ -185,7 +262,6 @@ int main()
     Parser parser;
     init_parser(&parser, &lexer); // intializing the parser
     Service *service = parse_service(&parser);
-    // now if we could display service;
-    
+    display_service(service);
     return 0;
 }
