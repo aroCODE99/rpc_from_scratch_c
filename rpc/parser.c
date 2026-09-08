@@ -1,3 +1,4 @@
+#include "ast.h"
 #include "lexer.h"
 #include "logger.h"
 #include "vector.h"
@@ -11,46 +12,48 @@ typedef struct {
     Token curr_token;
 } Parser;
 
-typedef struct {
-    Token type;
-    Token name;
-} Parameter;
-
-// method will have number of args
-// now this is very similar to the
-// parameters
-//    ├── Parameter { type = "int",    name = "id" }
-//    └── Parameter { type = "string", name = "name" }
-typedef struct {
-    Token name;
-    vector parameters;
-    Token return_type;
-} Method;
-
-// so there is going to be Service
-// which will have multiple methods
-// above diagram goes for methods also
-typedef struct {
-    Token name;
-    vector methods;
-} Service;
-
-void display_service(Service *service)
+const char *token_type_name(TokenType type)
 {
-    // just displaying the name
-    display_token(service->name);
-    // printing methods
-    for (int i = 0; i < service->methods.total; ++i) {
-        Method *curr_method = service->methods.items[i];
-        display_token(curr_method->name);
-        // displaying the parameter
-        for (int j = 0; j < curr_method->parameters.total; ++j) {
-            Parameter *curr_parameter = curr_method->parameters.items[j];
-            display_token(curr_parameter->name);
-            display_token(curr_parameter->type);
-        }
-        display_token(curr_method->return_type);
+    switch (type) {
+    case TOKEN_IDENTIFIER:
+        return "identifier";
+
+    case TOKEN_KEYWORD:
+        return "keyword";
+
+    case TOKEN_LPAREN:
+        return "'('";
+
+    case TOKEN_RPAREN:
+        return "')'";
+
+    case TOKEN_LBRACE:
+        return "'{'";
+
+    case TOKEN_RBRACE:
+        return "'}'";
+
+    case TOKEN_COMMA:
+        return "','";
+
+    case TOKEN_SEMICOLON:
+        return "';'";
+
+    default:
+        return "unknown token";
     }
+}
+
+void syntax_error(Parser *parser, const char *message)
+{
+    log_error(
+        "Syntax error: %s. Got '%.*s'",
+        message,
+        parser->curr_token.length,
+        parser->curr_token.start
+    );
+
+    exit(1);
 }
 
 char *read_whole_file_in_buffer()
@@ -94,19 +97,27 @@ void advance_token(Parser *parser)
 void consume_token(Parser *parser, TokenType expected)
 {
     if (parser->curr_token.type != expected) {
-        log_error("Failed: Did not expected following token");
-        exit(1);
+        syntax_error(parser, token_type_name(expected));
     }
     advance_token(parser);
 }
 
-void consume_keyword(Parser *parser, char *keyword)
+void consume_keyword(Parser *parser, const char *keyword)
 {
-    if (!is_keyword(parser->curr_token.start, parser->curr_token.length, keyword)) {
-        log_error("Failed due to syntax error: expected %s, got %.*s", keyword, parser->curr_token.length,
-                  parser->curr_token.start);
+    if (!is_keyword(parser->curr_token.start,
+                    parser->curr_token.length,
+                    keyword)) {
+
+        log_error(
+            "Syntax error: expected keyword '%s', got '%.*s'",
+            keyword,
+            parser->curr_token.length,
+            parser->curr_token.start
+        );
+
         exit(1);
     }
+
     advance_token(parser);
 }
 
@@ -140,15 +151,26 @@ void parse_parameters(Parser *parser, vector *parameters)
     log_info("Parsing the parameters");
     consume_token(parser, TOKEN_LPAREN);
 
+    // if there are 0 args
+    if (is_current(parser, TOKEN_RPAREN)) {
+        consume_token(parser, TOKEN_RPAREN);
+        return;
+    }
+
     // adding the parameter to the parameters vector
     while (!is_current(parser, TOKEN_RPAREN)) {
         Parameter *parameter = parse_parameter(parser);
         vector_add(parameters, parameter);
 
-        // consuming the ','
-        if (is_current(parser, TOKEN_COMMA)) {
-            consume_token(parser, TOKEN_COMMA);
+        // this is wrong
+        if (is_current(parser, TOKEN_RPAREN)) {
+            break;
         }
+        // consuming the ','
+        if (!is_current(parser, TOKEN_COMMA)) {
+            syntax_error(parser, "',' or ')'");
+        }
+        consume_token(parser, TOKEN_COMMA);
     }
     consume_token(parser, TOKEN_RPAREN);
 }
