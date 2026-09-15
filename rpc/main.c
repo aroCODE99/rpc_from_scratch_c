@@ -2,27 +2,22 @@
 #include "ast.h"
 #include "emitter.h"
 #include "code_gen.h"
+#include "utility.h"
 
 #include <stdio.h>
 
-int write_output_file(const char *path, const char *content)
+int main(int argc, char **argv)
 {
-    FILE *file = fopen(path, "w");
+    shift_args(&argc, &argv); // shifting the program name
+    
+    const char *file_name = shift_args(&argc, &argv);
+    printf("file_name: %s\n", file_name);
+    char *buff = read_whole_file_in_buffer(file_name); // reading whole file in the buffer
 
-    if (file == NULL) {
-        perror("fopen");
-        return 0;
+    if (buff == NULL) {
+        return 1;
     }
 
-    fputs(content, file);
-
-    fclose(file);
-    return 1;
-}
-
-int main()
-{
-    char *buff = read_whole_file_in_buffer(); // reading whole file in the buffer
     Lexer lexer = {0};
     init_lexer(&lexer, buff);
     logger_set_level(LOG_INFO);

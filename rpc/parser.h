@@ -19,7 +19,6 @@ typedef struct {
 
 const char *token_type_name(TokenType type);
 void syntax_error(Parser *parser, const char *message);
-char *read_whole_file_in_buffer();
 void init_parser(Parser *parser, Lexer *lexer);
 void advance_token(Parser *parser);
 void consume_token(Parser *parser, TokenType expected);
