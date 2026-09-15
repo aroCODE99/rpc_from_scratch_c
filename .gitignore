@@ -2,3 +2,5 @@ todo
 client
 rpc_server
 rpc/nob.h
+rpc/main
+rpc/generated.c
