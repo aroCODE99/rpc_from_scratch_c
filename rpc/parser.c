@@ -1,16 +1,6 @@
-#include "ast.h"
-#include "lexer.h"
-#include "logger.h"
-#include "vector.h"
-#include <stdio.h>
+#define VECTOR_IMPLEMENTATION
 #include <stdlib.h>
-#include <string.h>
-
-// i think this will require the vector implementation
-typedef struct {
-    Lexer *lexer;
-    Token curr_token;
-} Parser;
+#include "parser.h"
 
 const char *token_type_name(TokenType type)
 {
@@ -47,39 +37,41 @@ const char *token_type_name(TokenType type)
 void syntax_error(Parser *parser, const char *message)
 {
     log_error(
-        "Syntax error: %s. Got '%.*s'",
-        message,
-        parser->curr_token.length,
-        parser->curr_token.start
-    );
+              "Syntax error: %s. Got '%.*s'",
+              message,
+              parser->curr_token.length,
+              parser->curr_token.start
+              );
 
     exit(1);
 }
 
+// i don't know what happend here
 char *read_whole_file_in_buffer()
 {
     char *path = "./test.rpc";
-    log_info("reading the whole %s into the buffer", path);
-
     FILE *file = fopen(path, "r");
     if (file == NULL) {
-        perror("Error");
+        log_error("Failed to open file: %s", path);
         return NULL;
     }
 
-    fseek(file, 0, SEEK_END);
+    if (fseek(file, 0, SEEK_END) < 0) {
+        log_error("Failed fseek");
+        return NULL;
+    }
     int file_size = ftell(file);
     rewind(file);
 
     char *buff = malloc(file_size * sizeof(char));
     if (buff == NULL) {
-        perror("Error");
+        log_error("Failed to allocate size to the buffer");
         return NULL;
     }
 
     size_t bytes_read = fread(buff, 1, file_size, file);
-    buff[bytes_read] = '\0';
     if (bytes_read > 0) return buff;
+    buff[bytes_read] = '\0';
     return NULL;
 }
 
@@ -109,11 +101,11 @@ void consume_keyword(Parser *parser, const char *keyword)
                     keyword)) {
 
         log_error(
-            "Syntax error: expected keyword '%s', got '%.*s'",
-            keyword,
-            parser->curr_token.length,
-            parser->curr_token.start
-        );
+                  "Syntax error: expected keyword '%s', got '%.*s'",
+                  keyword,
+                  parser->curr_token.length,
+                  parser->curr_token.start
+                  );
 
         exit(1);
     }
@@ -130,7 +122,6 @@ int is_current(Parser *parser, TokenType token_type)
 // (int32 number, int32 another_number) => int32 number
 Parameter *parse_parameter(Parser *parser)
 {
-    log_info("Parsing the parameter");
     Parameter *parameter = malloc(sizeof(Parameter));
     if (parameter == NULL) {
         log_error("Failed to allocate the memory");
@@ -148,7 +139,6 @@ Parameter *parse_parameter(Parser *parser)
 
 void parse_parameters(Parser *parser, vector *parameters)
 {
-    log_info("Parsing the parameters");
     consume_token(parser, TOKEN_LPAREN);
 
     // if there are 0 args
@@ -178,7 +168,6 @@ void parse_parameters(Parser *parser, vector *parameters)
 Method* parse_method(Parser *parser)
 {
     // i really don't know what i am doing at this point
-    log_info("Parsing the method");
     // initializing the method struct
     Method *method = malloc(sizeof(Method));
     if (method == NULL) {
@@ -189,7 +178,6 @@ Method* parse_method(Parser *parser)
     
     consume_keyword(parser, "rpc");
 
-    log_info("copying the method_name");
     method->name = parser->curr_token;
     consume_token(parser, TOKEN_IDENTIFIER);
 
@@ -213,13 +201,12 @@ Method* parse_method(Parser *parser)
 // like Method is list Method[] of methods
 void parse_methods(Parser *parser, vector *methods)
 {
-    log_info("Parsing the methods");
     consume_token(parser, TOKEN_LBRACE);
 
     // we are adding the method to the methods vector
     while (!is_current(parser, TOKEN_RBRACE)) {
         Method *method = parse_method(parser);
-        vector_add(methods, method);
+        vector_add(methods, method); // failing here
     }
     consume_token(parser, TOKEN_RBRACE);
 }
@@ -228,9 +215,8 @@ void parse_methods(Parser *parser, vector *methods)
 Service* parse_service(Parser* parser)
 {
     // initializing service struct
-    log_info("parsing service");
     Service *service = malloc(sizeof(Service));
-
+    vector_init(&service->methods);
     // I was doing this first
     // VECTOR_INIT(vec);
     // service->methods = &vec;
@@ -271,19 +257,21 @@ Service* parse_service(Parser* parser)
     return service;
 }
 
-int main()
-{
-    // so basically what is parser says ?
-    // It says: "Give me the next token, and based on what I've already seen, decide what this token means"
-    char *buff = read_whole_file_in_buffer(); // reading whole file in the buffer
-    Lexer lexer;
-    init_lexer(&lexer, buff);
-    logger_set_level(LOG_INFO);
-    
-    Token token;
-    Parser parser;
-    init_parser(&parser, &lexer); // intializing the parser
-    Service *service = parse_service(&parser);
-    display_service(service);
-    return 0;
-}
+//int main()
+//{
+//    // so basically what is parser says ?
+//    // It says: "Give me the next token, and based on what I've already seen, decide what this token means"
+//    char *buff = read_whole_file_in_buffer(); // reading whole file in the buffer 
+//    Lexer lexer;
+//    init_lexer(&lexer, buff);
+//    logger_set_level(LOG_INFO);
+//    
+//    Token token;
+//    Parser parser;
+//    init_parser(&parser, &lexer); // intializing the parser
+//    Service *service = parse_service(&parser);
+//    display_service(service);
+//    free_service(service);
+//    free(buff);
+//    return 0;
+//}

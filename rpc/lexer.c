@@ -8,7 +8,6 @@
 // helper methods
 void init_lexer(Lexer *lexer, const char *source)
 {
-    log_info("initializing the lexer");
     lexer->source = source;
     lexer->curr_char = source[0];
     lexer->index = 0;
@@ -74,9 +73,11 @@ Token read_identifier_or_keyword(Lexer *lexer)
     int length = (int)(&lexer->source[lexer->index] - start);
 
     // now checking if it is the identifier or keyword
-    if (is_keyword(start, length, "service") || is_keyword(start, length, "rpc") || 
-        is_keyword(start, length, "returns") || is_keyword(start, length, "int32")
-        || is_keyword(start, length, "bool")) {
+    if (is_keyword(start, length, "service") ||
+        is_keyword(start, length, "rpc") ||
+        is_keyword(start, length, "returns") ||
+        is_keyword(start, length, "int32") ||
+        is_keyword(start, length, "bool")) {
         return (Token){TOKEN_KEYWORD, start, length, line};
     }
 

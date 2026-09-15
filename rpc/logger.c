@@ -33,6 +33,7 @@ void logger_log(LogLevel level, const char *file, int line, const char *fmt, ...
     // Capture the current system timestamp
     time_t t = time(NULL);
     struct tm *tm_info = localtime(&t);
+
     char time_buf[16];
     strftime(time_buf, sizeof(time_buf), "%H:%M:%S", tm_info);
 
@@ -40,11 +41,11 @@ void logger_log(LogLevel level, const char *file, int line, const char *fmt, ...
     
     // Format out to standard error (stderr)
     va_list args;
-    va_start(args, fmt);
+    va_start(args, fmt); // this says "Start reading the arguments that came after fmt"
 
     // Print standard metadata header: [Time] [Level] [File:Line]
-    fprintf(stderr, "%s %s%-5s\x1b[0m \x1b[90m%s:%d:\x1b[0m ",
-            time_buf, level_colors[level], level_strings[level], file, line);
+    fprintf(stderr, "%s:%d:\x1b[0m %s %s%-5s\x1b[0m \x1b[90m",
+            file, line, time_buf, level_colors[level], level_strings[level]);
     
     // Print the user's custom message
     vfprintf(stderr, fmt, args);

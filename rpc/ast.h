@@ -1,8 +1,10 @@
 #ifndef AST_H
 #define AST_H
 
+#include "logger.h"
 #include "lexer.h"
 #include "vector.h"
+#include <stdlib.h>
 
 typedef struct {
     Token type;
@@ -28,6 +30,7 @@ typedef struct {
     vector methods;
 } Service;
 
+int validate_service(Service *service);
 void display_service(Service *service);
 void free_service(Service *service);
 
