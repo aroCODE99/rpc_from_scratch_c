@@ -76,7 +76,9 @@ Token read_identifier_or_keyword(Lexer *lexer)
     if (is_keyword(start, length, "service") ||
         is_keyword(start, length, "rpc") ||
         is_keyword(start, length, "returns") ||
+        is_keyword(start, length, "void") ||
         is_keyword(start, length, "int32") ||
+        is_keyword(start, length, "string") ||
         is_keyword(start, length, "bool")) {
         return (Token){TOKEN_KEYWORD, start, length, line};
     }

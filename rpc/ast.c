@@ -6,9 +6,9 @@
 // a simple 
 int validate_service(Service *service)
 {
-    for (int i = 0; i < service->methods.total - 1; ++i) {
+    for (size_t i = 0; i < service->methods.total - 1; ++i) {
         Method *curr_method = service->methods.items[i];
-        for (int j = i + 1; j < service->methods.total; ++j) {
+        for (size_t j = i + 1; j < service->methods.total; ++j) {
             Method *other_method = service->methods.items[j];
             if (curr_method->name.length == other_method->name.length &&
                 strncmp(curr_method->name.start, other_method->name.start,
@@ -29,11 +29,11 @@ void display_service(Service *service)
     // just displaying the name
     display_token(service->name);
     // printing methods
-    for (int i = 0; i < service->methods.total; ++i) {
+    for (size_t i = 0; i < service->methods.total; ++i) {
         Method *curr_method = service->methods.items[i];
         display_token(curr_method->name);
         // displaying the parameter
-        for (int j = 0; j < curr_method->parameters.total; ++j) {
+        for (size_t j = 0; j < curr_method->parameters.total; ++j) {
             Parameter *curr_parameter = curr_method->parameters.items[j];
             display_token(curr_parameter->name);
             display_token(curr_parameter->type);
@@ -46,7 +46,7 @@ void display_service(Service *service)
 // this will makes sense to you if u understand how the vector implementation is working
 void free_method(Method *method)
 {
-    for (int i = 0; i < method->parameters.total; ++i) {
+    for (size_t i = 0; i < method->parameters.total; ++i) {
         // freeeing each parameter
         free(method->parameters.items[i]);
     }
@@ -56,7 +56,7 @@ void free_method(Method *method)
 
 void free_service(Service *service)
 {
-    for (int i = 0; i < service->methods.total; ++i) {
+    for (size_t i = 0; i < service->methods.total; ++i) {
         free_method(service->methods.items[i]);
     }
     free(service->methods.items); // freeing method vector pointer

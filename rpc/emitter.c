@@ -82,45 +82,6 @@ void emitter_dedent(Emitter *emit) {
     }
 }
 
-int emitter_open_block(Emitter *emitter, const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    int needed = vsnprintf(NULL, 0, fmt, args);
-    va_end(args);
-
-    if (needed > 0) {
-        char *temp = (char*)malloc((size_t)needed + 1);
-        if (temp == NULL) {
-            log_error("Failed to allocate the Memory");
-            return 0;
-        }
-        va_start(args, fmt);
-        vsnprintf(temp, (size_t)needed + 1, fmt, args);
-        va_end(args);
-
-        if (!emitter_writeln(emitter, "%s {", temp)) {
-            return 0;
-        }
-        free(temp);
-    } else {
-        emitter_writeln(emitter, " {");
-    }
-    emitter_indent(emitter);
-    return 1;
-}
-
-int emitter_close_block(Emitter *emitter, const char *suffix)
-{
-    emitter_dedent(emitter);
-    if (suffix) {
-        emitter_writeln(emitter, "}%s", suffix);
-    } else {
-        emitter_writeln(emitter, "}");
-    }
-    return 0;
-}
-
 int emitter_write_token(Emitter *emitter, Token token)
 {
     if (!emitter_write(emitter, "%.*s", token.length, token.start)) {
@@ -129,36 +90,33 @@ int emitter_write_token(Emitter *emitter, Token token)
     return 1;
 }
 
-int emitter_write(Emitter *emitter, const char *fmt, ...)
+int emitter_write_v(Emitter *emitter, const char *fmt, va_list args)
 {
-    // 1. Inject indentation if we are starting a clean line
     if (emitter->at_line_start && emitter->indent_level > 0) {
-        for (int i = 0; i < emitter->indent_level; i++) {
+        for (int i = 0; i < emitter->indent_level; ++i) {
             sb_append(&emitter->sb, emitter->indent_str);
         }
         emitter->at_line_start = false;
     }
 
-    va_list args;
-    va_start(args, fmt);
+    va_list args_copy;
+    va_copy(args_copy, args);
+    int needed = vsnprintf(NULL, 0, fmt, args_copy);
+    va_end(args_copy);
 
-    int needed = vsnprintf(NULL, 0, fmt, args);
     if (needed < 0) {
         log_error("Failed to determine formatted string size");
         return 0;
     }
 
-    va_end(args);
-
     if (!ensure_resize(&emitter->sb, needed)) {
         return 0;
     }
     
-    va_start(args, fmt);
     needed = vsnprintf(emitter->sb.buff + emitter->sb.length,
-                  needed + 1,
-                  fmt,
-                  args);
+                       (size_t)needed + 1,
+                       fmt,
+                       args);
 
     if (needed < 0) {
         log_error("Failed to append");
@@ -166,41 +124,62 @@ int emitter_write(Emitter *emitter, const char *fmt, ...)
     }
 
     emitter->sb.length += needed;
-    va_end(args);
     return 1;
+}
+
+int emitter_write(Emitter *emitter, const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    int res = emitter_write_v(emitter, fmt, args);
+    va_end(args);
+    return res;
 }
 
 int emitter_writeln(Emitter *emitter, const char *fmt, ...)
 {
-    if (fmt && strlen(fmt) > 0) {
+    if (fmt) {
         va_list args;
         va_start(args, fmt);
-
-        int needed = vsnprintf(NULL, 0, fmt, args);
-        if (needed < 0) {
-            log_error("Failed to determine formatted string size");
-            return 0;
-        }
- 
+        int res = emitter_write_v(emitter, fmt, args);
         va_end(args);
-
-        va_start(args, fmt);
-        char *temp = malloc(sizeof(char) * needed);
-        if (!temp) {
-            log_error("Failed to allocate size");
-            return 0;
-        }
-        vsnprintf(temp, (size_t)needed + 1, fmt, args);
-        emitter_write(emitter, temp);
-        va_end(args);
+        if (!res) return 0;
     }
+    
     sb_append_char(&emitter->sb, '\n');
     emitter->at_line_start = true;
     return 1;
 }
 
+int emitter_open_block(Emitter *emitter, const char *fmt, ...)
+{
+    if (fmt) {
+        va_list args;
+        va_start(args, fmt);
+        int res = emitter_write_v(emitter, fmt, args);
+        va_end(args);
+        if (!res) return 0;
+        emitter_writeln(emitter, "{");
+    } else {
+        emitter_writeln(emitter,  "{");
+    }
+    emitter_indent(emitter);
+    return 1;
+}
+
+int emitter_close_block(Emitter *emitter, const char *suffix)
+{
+    int n = strlen(suffix);
+    emitter_dedent(emitter);
+    if (n > 0) {
+        emitter_writeln(emitter, "}%s", suffix);
+    } else {
+        emitter_writeln(emitter, "}");
+    }
+    return 0;
+}
+
 void emitter_free(Emitter *emitter)
 {
     free(emitter->sb.buff);
-    free(emitter);
 }

@@ -7,6 +7,7 @@
 /*
  * All possible token types produced by the lexer.
  */
+
 typedef enum {
     TOKEN_KEYWORD,
     TOKEN_IDENTIFIER,

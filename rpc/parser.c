@@ -113,7 +113,6 @@ Parameter *parse_parameter(Parser *parser)
 void parse_parameters(Parser *parser, vector *parameters)
 {
     consume_token(parser, TOKEN_LPAREN);
-
     // if there are 0 args
     if (is_current(parser, TOKEN_RPAREN)) {
         consume_token(parser, TOKEN_RPAREN);
@@ -147,7 +146,6 @@ Method* parse_method(Parser *parser)
         log_error("Failed to allocate the memory");
         exit(1);
     }
-    vector_init(&method->parameters);
     
     consume_keyword(parser, "rpc");
 
@@ -189,7 +187,6 @@ Service* parse_service(Parser* parser)
 {
     // initializing service struct
     Service *service = malloc(sizeof(Service));
-    vector_init(&service->methods);
     // I was doing this first
     // VECTOR_INIT(vec);
     // service->methods = &vec;

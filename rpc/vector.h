@@ -72,9 +72,13 @@ size_t vector_total(const vector *v)
 //     |
 //     v
 //   actual data
-static int vector_resize(vector *v, int capacity)
+static int vector_resize(vector *v, size_t capacity)
 {
-    void **items = (void **)realloc(v->items, sizeof(void *) * capacity);
+    if (v->capacity == 0) {
+        // initialize the vector
+        capacity = VECTOR_INIT_CAPACITY;
+    }
+    void **items = (void **)realloc(v->items, sizeof(*v->items) * capacity);
     if (items == NULL) {
         return 0;
     }
