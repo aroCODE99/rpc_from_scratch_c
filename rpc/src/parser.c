@@ -1,6 +1,6 @@
 #define VECTOR_IMPLEMENTATION
 #include <stdlib.h>
-#include "parser.h"
+#include "../include/parser.h"
 
 const char *token_type_name(TokenType type)
 {

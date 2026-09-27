@@ -1,5 +1,5 @@
-#include "lexer.h"
-#include "logger.h"
+#include "../include/lexer.h"
+#include "../include/logger.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

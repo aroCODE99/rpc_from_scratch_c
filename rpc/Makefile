@@ -1,26 +1,24 @@
 CC             := gcc
-CFLAGS         := -Wall -Wextra -ggdb 
-OBJ_DIR        := build
-TARGET         := $(OBJ_DIR)/rpc_gen
-GENERATED_FILE := rpc_server.c rpc_client.c
+CFLAGS         := -Wall -Wextra -ggdb
+BIN_DIR        := bin
+SRC_DIR        := src
+BUILD_DIR      := build
+TARGET         := $(BUILD_DIR)/rpc_gen
+ 
+SRCS           := $(wildcard $(SRC_DIR)/*.c)
+OBJS           := $(SRCS:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+.PHONY         := all clean
+all            := $(TARGET)
 
-SRC = $(wildcard $(SRC_DIR)/*.c)
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) $(OBJS) -o $(TARGET)
 
-OBJ = $(SRC:.c=.o)
-
-.PHONY = all clean
-
-all = $(TARGET)
-
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET)
-
-$(OBJ_DIR)%.o: %.c | $(OBJ_DIR)
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) -c $(CFLAGS) $< -o $@
 
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 clean:
-	rm -f $(OBJ) $(TARGET) $(GENERATED_FILE)
+	rm -f $(OBJS) $(TARGET) $(GENERATED_FILE)
 

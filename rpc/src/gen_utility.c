@@ -1,4 +1,4 @@
-#include "gen_utility.h"
+#include "../include/gen_utility.h"
 
 int generate_includes(Emitter *emitter)
 {

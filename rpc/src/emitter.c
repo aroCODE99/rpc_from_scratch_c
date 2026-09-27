@@ -1,4 +1,4 @@
-#include "emitter.h"
+#include "../include/emitter.h"
 
 int emitter_init(Emitter *emitter)
 {
