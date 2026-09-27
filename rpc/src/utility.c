@@ -63,6 +63,16 @@ static char* shift_args(int *argc, char ***argv)
     return *(*argv)++;
 }
 
+void normalize_output_dir(char *output_dir)
+{
+    size_t len = strlen(output_dir);
+
+    while (len > 1 && output_dir[len - 1] == '/') {
+        output_dir[len - 1] = '\0';
+        len--;
+    }
+}
+
 int parse_args(int argc, char **argv, Options *options)
 {
     options->program_name = shift_args(&argc, &argv); // skipping the programm name
@@ -72,11 +82,9 @@ int parse_args(int argc, char **argv, Options *options)
             if (strcmp(curr_arg, "--client") == 0) {
                 options->client = true;
                 options->server = false;
-                options->mode_specified = true;
             } else if (strcmp(curr_arg, "--server") == 0) {
                 options->client = false;
                 options->server = true;
-                options->mode_specified = true;
             } else if (strcmp(curr_arg, "--help") == 0 || strcmp(curr_arg, "-h") == 0) {
                 print_help(options->program_name);
                 return 0;
@@ -86,6 +94,7 @@ int parse_args(int argc, char **argv, Options *options)
                     return 0;
                 }
                 options->output_dir = shift_args(&argc, &argv);
+                normalize_output_dir(options->output_dir);
             } else {
                 fprintf(stderr, "error: unknown option '%s'\n", curr_arg);
                 return 0;
@@ -98,9 +107,6 @@ int parse_args(int argc, char **argv, Options *options)
                 );
                 return 0;
             }
-            options->client = true;
-            options->server = true;
-            options->output_dir = ".";
             options->input = curr_arg;
         }
     }
@@ -136,6 +142,7 @@ Service *compile_file(const char *file_name)
 // and have the (Options *)
 // first of all what is the path
 // "options->generated_path/name"
+
 int write_output_file(const char *output_dir,
         const char *file_name,
         const char *content
@@ -145,9 +152,11 @@ int write_output_file(const char *output_dir,
     if (output_dir == NULL || file_name == NULL || content == NULL) {
         return 0;
     }
+
     size_t n = strlen(output_dir) + strlen(file_name) + 2; //one for null termination and other for the slash
     char path[n];
     snprintf(path, n, "%s/%s", output_dir, file_name);
+
     // so there is no checking for the dir here if it exists or not
     FILE *file = fopen(path, "w");
     if (file == NULL) {
@@ -167,7 +176,7 @@ int generate_files(Service *service, Options *options)
     Emitter server_emitter = {0};
     Emitter client_emitter = {0};
 
-    if (options->client) {
+    if (options->server) {
         if (!emitter_init(&server_emitter)) {
             log_error("Failed to initialize emitter");
             goto cleanup;
@@ -184,7 +193,7 @@ int generate_files(Service *service, Options *options)
         }
     }
 
-    if (options->server) {
+    if (options->client) {
         if (!emitter_init(&client_emitter)) {
             log_error("Failed to initialize emitter");
             goto cleanup;

@@ -15,7 +15,7 @@
 typedef struct {
     const char *program_name;
     const char *input;
-    const char *output_dir;
+    char *output_dir; // modification require for normalizing it
     bool client;
     bool server;
     bool mode_specified;

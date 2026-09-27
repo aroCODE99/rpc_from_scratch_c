@@ -9,8 +9,12 @@
 
 int main(int argc, char **argv)
 {
-    Options options = {0};
-    
+    // setting up the default options
+    Options options = {
+        .client = true,
+        .server = true,
+        .output_dir = "."
+    };
     // ./rpc_gen -o test_rpc
     // parsing the arg
 
@@ -23,13 +27,6 @@ int main(int argc, char **argv)
         fprintf(stderr, "error: no input file specified\n");
         fprintf(stderr, "try '%s --help' for more information\n", options.program_name);
         exit(2);
-    }
-
-    options.output_dir = ".";
-
-    if (!options.mode_specified) {
-        options.client = true;
-        options.server = true;
     }
     
     Service *service = compile_file(options.input);
