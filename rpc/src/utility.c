@@ -5,17 +5,29 @@ static void print_help(const char *program_name)
     printf(
         "Usage: %s [options] <input.rpc>\n"
         "\n"
-        "Generate C client and server code from an RPC definition file.\n"
+        "Generate C client and/or server code from an RPC definition file.\n"
         "\n"
         "Options:\n"
         "  -o, --output <dir>    Output directory (default: .)\n"
+        "      --client         Generate client code only\n"
+        "      --server         Generate server code only\n"
+        "      --ast            Print the parsed AST and exit\n"
         "  -h, --help            Show this help message\n"
+        "\n"
+        "Notes:\n"
+        "  If neither --client nor --server is specified, both are generated.\n"
+        "  --client and --server cannot be used together.\n"
+        "  --ast prints the parsed AST instead of generating code.\n"
         "\n"
         "Examples:\n"
         "  %s service.rpc\n"
+        "  %s --client service.rpc\n"
+        "  %s --server service.rpc\n"
         "  %s -o generated service.rpc\n"
-        "  %s --output generated service.rpc\n"
+        "  %s --ast service.rpc\n"
         "\n",
+        program_name,
+        program_name,
         program_name,
         program_name,
         program_name,
@@ -79,7 +91,9 @@ int parse_args(int argc, char **argv, Options *options)
     while (argc > 0) {
         char *curr_arg = shift_args(&argc, &argv);
         if (curr_arg[0] == '-') {
-            if (strcmp(curr_arg, "--client") == 0) {
+            if (strcmp(curr_arg, "--ast") == 0) {
+                options->print_ast = true;
+            } else if (strcmp(curr_arg, "--client") == 0) {
                 options->client = true;
                 options->server = false;
             } else if (strcmp(curr_arg, "--server") == 0) {
@@ -172,10 +186,17 @@ int write_output_file(const char *output_dir,
 
 int generate_files(Service *service, Options *options)
 {
+    // if we just need to display the ast
     int status = 1;
     Emitter server_emitter = {0};
     Emitter client_emitter = {0};
 
+    if (options->print_ast) {
+        print_service_tree(service);
+        status = 0;
+        goto cleanup;
+    }
+    
     if (options->server) {
         if (!emitter_init(&server_emitter)) {
             log_error("Failed to initialize emitter");

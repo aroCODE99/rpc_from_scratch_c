@@ -31,7 +31,7 @@ typedef struct {
 } Service;
 
 int validate_service(Service *service);
-void display_service(Service *service);
+void print_service_tree(Service *service);
 void free_service(Service *service);
 
 #endif

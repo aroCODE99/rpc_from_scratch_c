@@ -12,8 +12,8 @@ int validate_service(Service *service)
             Method *other_method = service->methods.items[j];
             if (curr_method->name.length == other_method->name.length &&
                 strncmp(curr_method->name.start, other_method->name.start,
-                        curr_method->name.length) == 0)
-                {
+                        curr_method->name.length) == 0
+                ) {
                     log_error("Semantic error: duplicate method '%.*s'",
                               curr_method->name.length,
                               curr_method->name.start);
@@ -24,21 +24,53 @@ int validate_service(Service *service)
     return 1;
 }
 
-void display_service(Service *service)
+static void print_token_node(const char* label, Token token,
+        const char* prefix, bool is_last)
 {
-    // just displaying the name
+    // Prints:  ├── Label: token_text   OR   └── Label: token_text
+    printf("%s%s %s: ", prefix, is_last ? "└──" : "├──", label);
+    display_token(token);
+    printf("\n");
+}
+
+// i still don't know how does this printing works i just copied it from internet
+void print_service_tree(Service *service)
+{
+    // 1. Root level: Service name
+    printf("Service: ");
     display_token(service->name);
-    // printing methods
-    for (size_t i = 0; i < service->methods.total; ++i) {
+    printf("\n");
+
+    size_t total_methods = service->methods.total;
+    for (size_t i = 0; i < total_methods; ++i) {
         Method *curr_method = service->methods.items[i];
-        display_token(curr_method->name);
-        // displaying the parameter
-        for (size_t j = 0; j < curr_method->parameters.total; ++j) {
+        bool is_last_method = (i == total_methods - 1);
+
+        // 2. Method level
+        print_token_node("Method", curr_method->name, "", is_last_method);
+
+        // Define the prefix for the children of this method.
+        // If it's the last method, we don't draw a continuous vertical line down.
+        const char* method_prefix = is_last_method ? "    " : "│   ";
+
+        // 3. Inner structure of the method (Parameters & Return Type)
+        size_t total_params = curr_method->parameters.total;
+        
+        // Loop through parameters
+        for (size_t j = 0; j < total_params; ++j) {
             Parameter *curr_parameter = curr_method->parameters.items[j];
-            display_token(curr_parameter->name);
-            display_token(curr_parameter->type);
+            
+            // Parameter Name
+            print_token_node("Param Name", curr_parameter->name, method_prefix, false);
+            
+            // Parameter Type (nested under the parameter)
+            char param_prefix[64];
+            snprintf(param_prefix, sizeof(param_prefix), "%s│   ", method_prefix);
+            print_token_node("Param Type", curr_parameter->type, param_prefix, true);
         }
-        display_token(curr_method->return_type);
+
+        // 4. Return Type (Always at the end of the method's list)
+        print_token_node("Return Type", curr_method->return_type, method_prefix, true);
     }
 }
 

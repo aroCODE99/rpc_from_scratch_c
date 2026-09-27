@@ -176,6 +176,6 @@ void display_token(Token token)
         "SEMICOLON"
     };
     // why is this not working
-    log_info("[Line: %d] Type: %-10s | Value: \"%.*s\"", 
-             token.line, type_names[token.type], token.length, token.start);
+    printf("Type: %-10s | Value: \"%.*s\"", 
+              type_names[token.type], token.length, token.start);
 }

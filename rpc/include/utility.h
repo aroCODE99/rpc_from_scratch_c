@@ -16,9 +16,10 @@ typedef struct {
     const char *program_name;
     const char *input;
     char *output_dir; // modification require for normalizing it
+    
     bool client;
     bool server;
-    bool mode_specified;
+    bool print_ast;
 } Options;
 
 char *read_whole_file_in_buffer(const char *);
