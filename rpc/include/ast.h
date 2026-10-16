@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "vector.h"
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef struct {
     Token type;

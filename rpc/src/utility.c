@@ -157,14 +157,16 @@ Service *compile_file(const char *file_name)
 // first of all what is the path
 // "options->generated_path/name"
 
-int write_output_file(const char *output_dir,
-        const char *file_name,
-        const char *content
-) {
+int write_output_file(const char *output_dir, const char *file_name, const char *content)
+{
     // but how does this method figure out what we are generating the client or server
     // TODO: validate the file_name;
     if (output_dir == NULL || file_name == NULL || content == NULL) {
         return 0;
+    }
+
+    if (mkdir(output_dir, 0755) == 0) {
+        log_info("Created %s", output_dir);
     }
 
     size_t n = strlen(output_dir) + strlen(file_name) + 2; //one for null termination and other for the slash
@@ -172,6 +174,7 @@ int write_output_file(const char *output_dir,
     snprintf(path, n, "%s/%s", output_dir, file_name);
 
     // so there is no checking for the dir here if it exists or not
+    log_info("Generating %s", path);
     FILE *file = fopen(path, "w");
     if (file == NULL) {
         perror("fopen");
@@ -188,6 +191,9 @@ int generate_files(Service *service, Options *options)
 {
     // if we just need to display the ast
     int status = 1;
+    // thhis would be greate if we reuse the same emitter
+    Emitter rpc_buff_emitter = {0};
+    Emitter rpc_helper_emitter = {0};
     Emitter server_emitter = {0};
     Emitter client_emitter = {0};
 
@@ -196,7 +202,40 @@ int generate_files(Service *service, Options *options)
         status = 0;
         goto cleanup;
     }
+
+    // generating the STRING_BUILDER_H
+    if (!emitter_init(&rpc_buff_emitter)) {
+        log_error("Failed to initialize emitter");
+        goto cleanup;
+    }
     
+    if (!generate_sb_header_file(&rpc_buff_emitter)) {
+        log_error("Error generating the StringBuilder");
+        goto cleanup;
+
+    }
+    if (!write_output_file(options->output_dir, "serialization.h", rpc_buff_emitter.sb.buff)) {
+        log_error("Failed to write file");
+        goto cleanup;
+    }
+    
+    // generating the RPC_HELPER_H
+    if (!emitter_init(&rpc_helper_emitter)) {
+        log_error("Failed to initialize emitter");
+        goto cleanup;
+    }
+    
+    if (!generate_rpc_helper_file(&rpc_helper_emitter)) {
+        log_error("Error generating the StringBuilder");
+        goto cleanup;
+
+    }
+    if (!write_output_file(options->output_dir, "rpc_helper.h", rpc_helper_emitter.sb.buff)) {
+        log_error("Failed to write file");
+        goto cleanup;
+    }
+
+
     if (options->server) {
         if (!emitter_init(&server_emitter)) {
             log_error("Failed to initialize emitter");
@@ -236,6 +275,8 @@ int generate_files(Service *service, Options *options)
 cleanup:
     emitter_free(&client_emitter);
     emitter_free(&server_emitter);
+    emitter_free(&rpc_buff_emitter);
+    emitter_free(&rpc_helper_emitter);
 
     free_service(service);
 

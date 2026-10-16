@@ -8,7 +8,10 @@
 #include "emitter.h"
 #include "code_gen.h"
 #include "code_gen_client.h"
+#include "code_gen_helper.h"
+#include "generate_serialization_header.h"
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <stdbool.h>
 

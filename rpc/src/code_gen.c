@@ -18,7 +18,7 @@
 //                string name
 //            return_type = User
 
-int generate_method(Emitter *emitter, Service *service, Method* method)
+static int generate_method(Emitter *emitter, Service *service, Method* method)
 {
     emitter_writeln(emitter, "// generated method by simple rpc");
 
@@ -47,6 +47,7 @@ int generate_method(Emitter *emitter, Service *service, Method* method)
     emitter_writeln(emitter, ")");
     emitter_open_block(emitter, "");
     emitter_writeln(emitter, "// User Implementation");
+    emitter_writeln(emitter, "return %s;", get_default_value(method));
     emitter_close_block(emitter, "");
     return 1;
 }
@@ -184,11 +185,7 @@ static void generate_get_bind_socket_fn(Emitter *emitter)
     emitter_close_block(emitter, "");
 }
 
-static int generate_method_call(
-    Emitter *emitter,
-    Service *service,
-    Method *method
-)
+static int generate_method_call(Emitter *emitter, Service *service, Method *method)
 {
     if (!generate_type(emitter, method->return_type)) {
         log_error("Invalid return type");
@@ -219,99 +216,57 @@ static int generate_method_call(
 static int generate_send_response(Emitter *emitter, Method *method)
 {
     switch (classify_type(method->return_type)) {
-    case RPC_STRING:
-        // if it is the string then we first going to send the length as the
-        // tcp doesn't have the string mechanics like '\0'
-        
-        emitter_writeln(emitter, "uint32_t result_len = (uint32_t)strlen(result);");
-        emitter_writeln(emitter, "uint32_t net_result_len = htonl(result_len);");
-        emitter_writeln(emitter, "");
-
+    case INT32:
         emitter_open_block(
             emitter,
-            "if (send(%s, &net_result_len, sizeof(net_result_len), 0) <= 0)", NEWFD
+            "if (!rpc_serialize_i32(&buffer, result)) "
         );
-        emitter_writeln(emitter, "close(%s);", NEWFD);
+
+        emitter_writeln(
+            emitter,
+            "fprintf(stderr, \"Failed to serialize result\\n\");"
+        );
+        emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+        emitter_writeln(emitter, "close(%s);", CLIENTFD);
         emitter_writeln(emitter, "continue;");
+
         emitter_close_block(emitter, "");
+        break;
 
-        emitter_writeln(emitter, "");
-
+    case BOOL:
         emitter_open_block(
             emitter,
-            "if (send(%s, result, result_len, 0) <= 0)", NEWFD
+            "if (!rpc_serialize_bool(&buffer, result)) "
         );
-        emitter_writeln(emitter, "close(%s);", NEWFD);
-        emitter_writeln(emitter, "continue;");
-        emitter_close_block(emitter, "");
-
-        return 1;
-
-    case RPC_INT32:
-    case RPC_BOOL:
-        /* both fit in a uint32_t on the wire */
-        emitter_writeln(emitter, "uint32_t net_result = htonl((uint32_t)result);");
-        emitter_writeln(emitter, "");
-
-        emitter_open_block(
+        emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+        emitter_writeln(
             emitter,
-            "if (send(%s, &net_result, sizeof(net_result), 0) <= 0)", NEWFD
+            "fprintf(stderr, \"Failed to serialize result\\n\");"
         );
-        emitter_writeln(emitter, "close(%s);", NEWFD);
+        emitter_writeln(emitter, "close(%s);", CLIENTFD);
         emitter_writeln(emitter, "continue;");
+
         emitter_close_block(emitter, "");
-        return 1;
-    case RPC_UNKNOWN:
+        break;
+
+    case UNKNOWN:
     default:
-        log_error("Cannot generate response serialization for unknown type");
+        log_error("Unsupported RPC return type");
         return 0;
     }
-}
-
-// so we are currently only supporting the int32_t
-static int generate_unpack_fn(Emitter *emitter)
-{
-    emitter_writeln(
-        emitter,
-        "static int32_t unpack(uint32_t num)"
-    );
-
-    emitter_open_block(emitter, "");
-
-    emitter_writeln(
-        emitter,
-        "return ntohl((int32_t)num);"
-    );
-
-    emitter_close_block(emitter, "");
-
-    emitter_writeln(emitter, "");
 
     return 1;
 }
 
+// so we are currently only supporting the int32_t
 static int generate_dispatch(Emitter *emitter, Service *service)
 {
     const char *method_id = "method_id";
     emitter_writeln(emitter, "uint32_t %s;", method_id);
+    generate_get_fn(emitter, method_id, UINT32);
     emitter_writeln(emitter, "");
 
-    emitter_open_block(
-        emitter,
-        "if (recv(%s, &%s, sizeof(%s), 0) <= 0)", method_id, method_id, NEWFD
-    );
-
-    emitter_writeln(emitter, "close(%s);", NEWFD);
-    emitter_writeln(emitter, "continue;");
-
-    emitter_close_block(emitter, "");
-
-    emitter_writeln(emitter, "");
-
-    emitter_writeln(emitter, "%s = unpack(%s);", method_id, method_id);
-    emitter_writeln(emitter, "");
-
-    emitter_open_block(emitter, "switch (%s)", method_id);
+    emitter_open_block(emitter, "switch (%s) ", method_id);
 
     // this is we generating the method dispatcher
     for (size_t i = 0; i < service->methods.total; ++i) {
@@ -331,33 +286,30 @@ static int generate_dispatch(Emitter *emitter, Service *service)
         for (size_t j = 0; j < method->parameters.total; ++j) {
             Parameter *parameter = method->parameters.items[j];
 
-            emitter_writeln(emitter, "uint32_t raw_%.*s;",
-                            parameter->name.length, parameter->name.start);
-
-            emitter_open_block(emitter, "if (recv(%s, &raw_%.*s, sizeof(uint32_t), 0) <= 0)", NEWFD,
-                               parameter->name.length, parameter->name.start);
-            emitter_writeln(emitter, "close(%s);", NEWFD);
-            emitter_writeln(emitter, "continue;");
-            emitter_close_block(emitter, "");
-
-            /* unpacking the raw arg */
             if (!generate_type(emitter, parameter->type)) {
                 log_error("Invalid return type");
                 return 0;
             }
             emitter_write(emitter, " ");
             emitter_write_token(emitter, parameter->name);
-            emitter_write(emitter, " = unpack(raw_%.*s);",
-                          parameter->name.length, parameter->name.start);
-            emitter_writeln(emitter, "");
+            emitter_writeln(emitter, ";");
+            generate_get_fn_token(emitter, parameter->name, parameter->type);
         }
 
-        /* calling the method */
+        /*
+          restarting the rpc_buffer for sending the res
+          and generating the method callp
+         */
         generate_method_call(emitter, service, method);
+        
+        generate_send_response(emitter, method);
 
-        if (!generate_send_response(emitter, method)) {
-            return 0;
-        }
+        emitter_open_block(emitter, "if (send_all(%s, &buffer) <= 0) ", CLIENTFD);
+        emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+        emitter_writeln(emitter, "close(%s);", CLIENTFD);
+        emitter_writeln(emitter, "continue;");
+        emitter_close_block(emitter, "");
+
         emitter_writeln(emitter, "break;");
         emitter_close_block(emitter, "");
     }
@@ -390,7 +342,7 @@ static int generate_server_main(Emitter *emitter, Service *service)
 
     emitter_writeln(emitter, "");
 
-    emitter_open_block(emitter, "if (listen(%s, 5) == -1)", SOCKFD);
+    emitter_open_block(emitter, "if (listen(%s, 5) == -1) ", SOCKFD);
 
     emitter_writeln(emitter, "perror(\"listen\");");
     emitter_writeln(emitter, "exit(1);");
@@ -407,23 +359,21 @@ static int generate_server_main(Emitter *emitter, Service *service)
     emitter_writeln(emitter, "");
 
     emitter_writeln(emitter, "struct sockaddr their_addr;");
-    emitter_writeln(emitter, "socklen_t sin_size;");
-    emitter_writeln(emitter, "int %s;", NEWFD);
+    emitter_writeln(emitter, "socklen_t sin_size = sizeof(their_addr);");
+    emitter_writeln(emitter, "int %s;", CLIENTFD);
     emitter_writeln(emitter, "");
 
     emitter_open_block(emitter, "for (;;)");
-
-    emitter_writeln(emitter, "sin_size = sizeof(their_addr);");
-
+    emitter_writeln(emitter, "RpcBuffer buffer = {0};");
     emitter_writeln(
         emitter,
-        "%s = accept(%s, "
-        "(struct sockaddr *)&their_addr, &sin_size);", NEWFD, SOCKFD
+        "%s = accept(%s, (struct sockaddr *)&their_addr, &sin_size);",
+        CLIENTFD, SOCKFD
     );
 
     emitter_writeln(emitter, "");
 
-    emitter_open_block(emitter, "if (%s == -1)", NEWFD);
+    emitter_open_block(emitter, "if (%s == -1) ", CLIENTFD);
 
     emitter_writeln(emitter, "perror(\"accept\");");
     emitter_writeln(emitter, "continue;");
@@ -439,8 +389,7 @@ static int generate_server_main(Emitter *emitter, Service *service)
     }
 
     emitter_writeln(emitter, "");
-
-    emitter_writeln(emitter, "close(%s);", NEWFD);
+    emitter_writeln(emitter, "close(%s);", CLIENTFD);
 
     emitter_close_block(emitter, "");
     emitter_close_block(emitter, "");
@@ -455,8 +404,7 @@ int generate_service(Emitter *emitter, Service* service)
         return 0;
     }
     generate_server_constants(emitter);
-    generate_unpack_fn(emitter);
-    // generating the methods now 
+    // generating the user-defined methods 
     for (size_t i = 0; i < service->methods.total; ++i) {
         Method *curr_method = service->methods.items[i];
         if (!generate_method(emitter, service, curr_method)) {
@@ -465,11 +413,10 @@ int generate_service(Emitter *emitter, Service* service)
         emitter_writeln(emitter, "");
     }
 
-    // networking
-    //
     generate_get_bind_socket_fn(emitter);
     if (!generate_server_main(emitter, service)) {
         return 0;
     }
+
     return 1;
 }

@@ -8,7 +8,7 @@
 #define generate_recv_respone_raw(emitter, value, name) \
     generate_recv_respone_raw_impl(emitter, &value, name, TypeName(value))
 
-// just for the sake of it 
+// just for the sake of it
 static int generate_main(Emitter *emitter)
 {
     emitter_writeln(emitter, "int main()");
@@ -29,58 +29,6 @@ static int generate_client_constants(Emitter *emitter)
         emitter,
         "#define SERVER \"127.0.0.1\""
     );
-
-    emitter_writeln(emitter, "");
-
-    return 1;
-}
-
-
-static int generate_rpc_client_struct(Emitter *emitter)
-{
-    emitter_writeln(emitter, "typedef struct {");
-    emitter_writeln(emitter, "    int sockfd;");
-    emitter_writeln(emitter, "} RpcClient;");
-    emitter_writeln(emitter, "");
-    return 1;
-}
-
-static int generate_unpack_fn(Emitter *emitter)
-{
-    emitter_writeln(
-        emitter,
-        "static int32_t unpack(uint32_t num)"
-    );
-
-    emitter_open_block(emitter, "");
-
-    emitter_writeln(
-        emitter,
-        "return ntohl((int32_t)num);"
-    );
-
-    emitter_close_block(emitter, "");
-
-    emitter_writeln(emitter, "");
-
-    return 1;
-}
-
-static int generate_pack_fn(Emitter *emitter)
-{
-    emitter_writeln(
-        emitter,
-        "static uint32_t pack(uint32_t value)"
-    );
-
-    emitter_open_block(emitter, "");
-
-    emitter_writeln(
-        emitter,
-        "return htonl(value);"
-    );
-
-    emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "");
 
@@ -275,7 +223,6 @@ static int generate_rpc_client_connect(Emitter *emitter)
         emitter,
         "client->sockfd = get_socket();"
     );
-
     emitter_writeln(
         emitter,
         "return 1;"
@@ -314,7 +261,7 @@ static int generate_rpc_client_close(Emitter *emitter)
 // This method should pack the sending
 // i also need the name
 
-// so the methodId is the just the index of the vector based methods
+// so the method_id is the just the index of the vector based methods
 // let's suppose i am sending this
 // int32_t method_id = 0;
 //  (type)  (name)     (value)
@@ -322,35 +269,9 @@ static int generate_rpc_client_close(Emitter *emitter)
 // how do i make this generic
 // so the packing is fix which is "uint32_t
 // for now let's think in terms of the int and bools
-static int generate_send_response_raw_impl(
-        Emitter *emitter, void *value, const char *name, const char *type
-) {
-    emitter_writeln(emitter, "// Sending the ", name);
-    size_t val = *((size_t *)value);
-    emitter_writeln(emitter, "%s %s = %zu;", type, name, val);
- 
-    // suffixing it with the pack_name
-    emitter_writeln(emitter, "%s pack_%s = pack(%s);",
-        PACK_TYPE,
-        name,
-        name
-    );
-    
-    // and now sending it
-    emitter_open_block(
-        emitter,
-        "if (!send(client->%s, &pack_%s, sizeof(pack_%s), 0) <= 0)", SOCKFD,
-        name, name
-    );
-    emitter_writeln(emitter, "close(client->%s);", SOCKFD);
-    emitter_writeln(emitter, "exit(%zu);", EXIT_69);
-    emitter_close_block(emitter, "");
-    return 1;
-}
-
 int generate_parameters(Emitter *emitter, Method *method)
 {
-    emitter_write(emitter, "(RpcClient *client"); // Fixed argument in the client method's
+    emitter_write(emitter, "(int fd"); // Fixed argument in the client method's
     
     for (size_t i = 0; i < method->parameters.total; ++i) {
         Parameter *parameter = method->parameters.items[i];
@@ -364,66 +285,11 @@ int generate_parameters(Emitter *emitter, Method *method)
     return 1;
 }
 
-static int generate_send_parameter_response(Emitter *emitter, Parameter *parameter)
-{
-    emitter_writeln(emitter, "// Something");
-    char name[parameter->name.length + 1];
-    snprintf(name, sizeof(name), "%.*s", parameter->name.length, parameter->name.start);
-    // packing the args
-    if (!generate_type(emitter, parameter->type)) {
-        log_error("error: generating the return type");
-        return 0;
-    }
-
-    emitter_writeln(emitter, " pack_%s;", name);
-    emitter_open_block(emitter,
-         "if (!send(client->%s, &pack_%s, sizeof(pack_%s), 0))",
-         SOCKFD, name, name
-     );
-    emitter_writeln(emitter, "close(client->%s);", SOCKFD);
-    emitter_writeln(emitter, "exit(%zu);", EXIT_69);
-     emitter_close_block(emitter, "");
-    return 1;
-}
-
-static int generate_send_parameters_response(Emitter *emitter, Method *method)
-{
-    for (size_t i = 0; i < method->parameters.total; ++i) {
-        Parameter *curr_param = method->parameters.items[i];
-        if (!generate_send_parameter_response(emitter, curr_param)) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-static int generate_method_return_expr(Emitter *emitter, Method *method)
-{
-    emitter_writeln(emitter,
-        "%s raw_res;", PACK_TYPE,
-        method->name.length, method->name.start);
-    emitter_open_block(emitter, "if (recv(client->%s, &raw_res, sizeof(raw_res), 0) <= 0)", SOCKFD);
-    emitter_writeln(emitter, "close(client->%s);", SOCKFD);
-    emitter_writeln(emitter, "exit(%zu);", EXIT_69);
-    emitter_close_block(emitter, "");
-
-    emitter_write(emitter, "return (");
-    if (!generate_type(emitter, method->return_type)) {
-        log_error("Error: Generating the return type");
-        return 0;
-    }
-    emitter_write(emitter, ")");
-    emitter_writeln(emitter, "unpack(raw_res);");
-    
-    return 1;
-}
-
 static int generate_rpc_method(Emitter *emitter, Service *service, size_t method_id)
 {
     Method *method = service->methods.items[method_id];
-
     if (method == NULL) {
-        log_error("Invalid methodId");
+        log_error("Invalid method_id");
         return 0;
     }
 
@@ -446,23 +312,28 @@ static int generate_rpc_method(Emitter *emitter, Service *service, size_t method
     emitter_open_block(emitter, "");
 
     emitter_writeln(emitter, "// RPC client call");
-
-    // now pack the method id and send it
-    // i need this to be a very generic method
-    if (!generate_send_response_raw(emitter, method_id, "methodId")) {
-        log_error("Error generating the send method_id");
-        return 0;
+    emitter_writeln(emitter, "RpcBuffer buffer = {0};");
+    emitter_writeln(emitter, "uint32_t method_id = %zu;", method_id);
+    // now the method_id is going to be same for all client call
+    generate_rpc_serialize_method(emitter, "size_t", "method_id");
+    for (size_t  i = 0; i < method->parameters.total; ++i) {
+        Parameter *curr_param = method->parameters.items[i];
+        generate_rpc_serialize_method_token(emitter, curr_param->type, curr_param->name);
     }
 
-    if (!generate_send_parameters_response(emitter, method)) {
-        log_error("Error generating the sending response");
-        return 0;
-    }
+    emitter_open_block(emitter, "if (send_all(fd, &buffer) <= 0) ");
+    emitter_writeln(emitter, "fprintf (stderr, \"Error: failed to send to the server\\n\");");
+    emitter_writeln(emitter, "exit(%zu);", EXIT_69); // TODO: better exit statuses
+    emitter_close_block(emitter, "");
 
-    if (!generate_method_return_expr(emitter, method)) {
-        log_error("Error generating the Return response");
+    emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+    if (!generate_type(emitter, method->return_type)) {
+        log_error("Error generating the return_type");
         return 0;
     }
+    emitter_writeln(emitter, " res;");
+    generate_get_fn(emitter, "res", classify_type(method->return_type));
+    emitter_writeln(emitter, "return res;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "");
@@ -492,19 +363,7 @@ int generate_client(Emitter *emitter, Service *service)
 
     if (!generate_client_constants(emitter)) {
         return 0;
-    }
-
-    if (!generate_rpc_client_struct(emitter)) {
-        return 0;
-    }
-
-    if (!generate_pack_fn(emitter)) {
-        return 0;
-    }
-    
-    if (!generate_unpack_fn(emitter)) {
-        return 0;
-    }
+ }
 
     if (!generate_get_socket_fn(emitter)) {
         return 0;

@@ -3,7 +3,6 @@
 
 #include <stdio.h>
 #include <stddef.h>
-
 /*
  * All possible token types produced by the lexer.
  */
@@ -42,24 +41,10 @@ typedef enum {
  * Represents a single token.
  */
 typedef struct {
-    
     TokenType type;
-    /*
-     * Pointer to the beginning of the token
-     * inside the original source string.
-     */
     const char *start;
-
-    /*
-     * Number of characters in the token.
-     */
     int length;
-
-    /*
-     * Line where the token appeared.
-     */
     int line;
-
 } Token;
 
 

@@ -48,8 +48,6 @@ static int ensure_resize(StringBuilder *sb, size_t str_length)
     return 1;
 }
 
-// TODO: append_first method
-
 int sb_append(StringBuilder *sb, const char *s)
 {
     size_t n = strlen(s);
