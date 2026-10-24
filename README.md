@@ -779,6 +779,100 @@ The generated code contains the networking and RPC infrastructure required to co
 
 ---
 
+## End-to-End Client Example
+
+The following example demonstrates how an application uses the RPC client to call methods implemented on a remote server.
+
+The client connects to the server over TCP, serializes the method ID and arguments into an `RpcBuffer`, sends the request, receives the response, and deserializes the returned value.
+
+### RPC Definition
+
+```text
+service MathService {
+    rpc sayHello(string name) returns (string);
+    rpc squareNum(int32 num) returns (int32);
+}
+```
+
+### Client Implementation
+    
+```c
+int main(void)
+{
+    RpcClient client = {0};
+
+    rpc_client_connect(&client);
+
+    printf("SERVER: %s\n",
+           MathService_sayHello(client.sockfd, "Prathamesh"));
+
+    printf("SERVER: %d\n",
+           MathService_squareNum(client.sockfd, 69));
+
+    rpc_client_close(&client);
+
+    return 0;
+}
+```
+
+### Request Format
+
+Each request contains a length prefix, a method ID, and the serialized arguments.
+
+For `sayHello("Prathamesh")`:
+
+```text
++----------------------+------------------+-------------------------+
+| Payload Length (4 B) | Method ID (4 B)  | Serialized String       |
++----------------------+------------------+-------------------------+
+                                            |
+                                            +-- String Length (4 B)
+                                            +-- String Bytes
+```
+
+For `squareNum(69)`:
+
+```text
++----------------------+------------------+------------------+
+| Payload Length (4 B) | Method ID (4 B)  | Integer (4 B)    |
++----------------------+------------------+------------------+
+```
+
+The payload length describes the bytes following the length prefix; it does not include the prefix itself.
+
+### What Happens During an RPC Call?
+
+1. **Connect:** The client resolves the server address and establishes a TCP connection.
+2. **Serialize:** The client encodes the method ID and arguments into an `RpcBuffer`.
+3. **Send:** The request is transmitted using `send_all()`.
+4. **Receive:** The client reads the framed response using `recv_rpc_buffer()`.
+5. **Deserialize:** The response bytes are converted back into the appropriate C type.
+6. **Return:** The RPC stub returns the server's result to the application.
+
+### Expected Output
+
+Assuming the server's `sayHello` implementation returns a greeting and `squareNum` returns the square of its argument:
+
+```text
+SERVER: Hello, Prathamesh!
+SERVER: 4761
+```
+
+The greeting depends on the server implementation.
+
+### Concepts Demonstrated
+
+- TCP client connection management
+- RPC method IDs and dispatch
+- Length-prefixed message framing
+- Serialization and deserialization
+- String and integer transport
+- Client-side RPC stubs
+- Request/response communication
+
+This example shows how a familiar C function call can act as a wrapper around network communication.
+The function executes locally on the client, but the operation it requests is performed by the server.
+
 # Project Structure
 
 The project is organized roughly around the following components:
