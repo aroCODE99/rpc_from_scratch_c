@@ -4,7 +4,7 @@ static void generate_ensure_capacity(Emitter *emitter)
 {
     emitter_writeln(
         emitter,
-        "static int rpc_buffer_ensure_capacity(RpcBuffer *buf, size_t add_len)"
+        "int rpc_buffer_ensure_capacity(RpcBuffer *buf, size_t add_len)"
     );
 
     emitter_open_block(emitter, "");
@@ -134,10 +134,11 @@ static void generate_rpc_buffer_free(Emitter *emitter)
     emitter_close_block(emitter, "");
 }
 
-static void generate_rpc_append_primitive(Emitter *emitter)
+static void generate_rpc_append_packed_val(Emitter *emitter)
 {
-    emitter_writeln(emitter, "static int rpc_buffer_append_primitive(RpcBuffer *buff, void *data, size_t len)");
+    emitter_writeln(emitter, "static int rpc_buffer_append_packed_val(RpcBuffer *buff, void *data)");
     emitter_open_block(emitter, "");
+    emitter_writeln(emitter, "uint32_t len = sizeof(uint32_t);");
     
     emitter_open_block(emitter, "if (!rpc_buffer_ensure_capacity(buff, len)) ");
     emitter_writeln(emitter, "return 0;");
@@ -150,18 +151,18 @@ static void generate_rpc_append_primitive(Emitter *emitter)
     emitter_close_block(emitter, "");
 }
 
-static void generate_rpc_read_primitive(Emitter *emitter)
+static void generate_rpc_read_packed_val(Emitter *emitter)
 {
     emitter_writeln(
         emitter,
-        "static int rpc_buffer_read_primitive(RpcBuffer *buf, void *out, size_t len)"
+        "static int rpc_buffer_read_packed_val(RpcBuffer *buf, void *out, uint32_t len)"
     );
 
     emitter_open_block(emitter, "");
-
+    
     emitter_writeln(emitter, "if (!buf || !out) return 0;");
     emitter_writeln(emitter, "// Bounds checking");
-    
+
     emitter_open_block(
         emitter,
         "if (buf->position > buf->length || len > buf->length - buf->position) "
@@ -185,11 +186,11 @@ static int generate_rpc_serialize_u32(Emitter *emitter)
     emitter_open_block(emitter, "");
     emitter_writeln(emitter, "uint32_t packed_val = htonl(val);");
 
-    emitter_open_block(emitter, "if (!rpc_buffer_append_primitive(buf, &packed_val, sizeof(packed_val)))");
-    emitter_writeln(emitter, "return 0;");
+    emitter_open_block(emitter, "if (!rpc_buffer_append_packed_val(buf, &packed_val))");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
     emitter_close_block(emitter, "");
     return 1;
 }
@@ -198,18 +199,19 @@ static int generate_rpc_deserialize_u32(Emitter *emitter)
 {
     emitter_writeln(
         emitter,
-        "int rpc_deserialize_u32(uint32_t packed_val, uint32_t *out)"
+        "int rpc_deserialize_u32(RpcBuffer *buffer, uint32_t *out)"
     );
     emitter_open_block(emitter, "");
 
-    emitter_open_block(emitter, "if (!out) ");
-    emitter_writeln(emitter, "fprintf(stderr, \"Error: Invalid serialized uint32_t value\\n\");");
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "uint32_t packed_val;");
+    emitter_open_block(emitter, "if (!rpc_buffer_read_packed_val(buffer, &packed_val, sizeof(packed_val))) ");
+    emitter_writeln(emitter, "fprintf(stderr, \"Error: Fail to read from rpc_buffer\\n\");");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     
     emitter_writeln(emitter, "*out = ntohl(packed_val);");
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
     emitter_close_block(emitter, "");
     emitter_writeln(emitter, "");
     return 1;
@@ -224,11 +226,11 @@ static int generate_rpc_serialize_i32(Emitter *emitter)
                   "// copying the exact bits of int32_t to uint32_t");
     emitter_writeln(emitter, "packed_val = htonl(packed_val);");
 
-    emitter_open_block(emitter, "if (!rpc_buffer_append_primitive(buf, &packed_val, sizeof(packed_val)))");
-    emitter_writeln(emitter, "return 0;");
+    emitter_open_block(emitter, "if (!rpc_buffer_append_packed_val(buf, &packed_val))");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
     emitter_close_block(emitter, "");
     return 1;
 }
@@ -237,20 +239,21 @@ static int generate_rpc_deserialize_i32(Emitter *emitter)
 {
     emitter_writeln(
         emitter,
-        "int rpc_deserialize_i32(uint32_t packed_val, int32_t *out)"
+        "int rpc_deserialize_i32(RpcBuffer *buffer, int32_t *out)"
     );
 
     emitter_open_block(emitter, "");
 
-    emitter_open_block(emitter, "if (!out) ");
-    emitter_writeln(emitter, "fprintf(stderr, \"Error: Invalid serialized int32_t value\\n\");");
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "uint32_t packed_val;");
+    emitter_open_block(emitter, "if (!rpc_buffer_read_packed_val(buffer, &packed_val, sizeof(packed_val))) ");
+    emitter_writeln(emitter, "fprintf(stderr, \"Error: Fail to read from rpc_buffer\\n\");");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     
     emitter_writeln(emitter, "packed_val = ntohl(packed_val);");
     emitter_writeln(emitter, "memcpy(out, &packed_val, sizeof(*out));");
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
 
     emitter_close_block(emitter, "");
     emitter_writeln(emitter, "");
@@ -263,11 +266,11 @@ static int generate_rpc_serialize_bool(Emitter *emitter)
     emitter_open_block(emitter, "");
     emitter_writeln(emitter, "uint32_t packed_val = val == true ? htonl(1) : htonl(0);");
     
-    emitter_open_block(emitter, "if (!rpc_buffer_append_primitive(buff, &packed_val, sizeof(packed_val))) ");
-    emitter_writeln(emitter, "return 0;");
+    emitter_open_block(emitter, "if (!rpc_buffer_append_packed_val(buff, &packed_val)) ");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
     
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
     emitter_close_block(emitter, "");
     return 1;
 }
@@ -276,25 +279,27 @@ static int generate_rpc_deserialize_bool(Emitter *emitter)
 {
     emitter_writeln(
         emitter,
-        "int rpc_deserialize_bool(uint32_t packed_val, bool *out)"
+        "int rpc_deserialize_bool(RpcBuffer *buffer, bool *out)"
     );
 
     emitter_open_block(emitter, "");
-
-    emitter_open_block(emitter, "if (!out) ");
-    emitter_writeln(emitter, "fprintf(stderr, \"Error: Invalid serialized boolean value\\n\");");
-    emitter_writeln(emitter, "return 0;");
+    
+    emitter_writeln(emitter, "uint32_t packed_val;");
+    
+    emitter_open_block(emitter, "if (!rpc_buffer_read_packed_val(buffer, &packed_val, sizeof(packed_val))) ");
+    emitter_writeln(emitter, "fprintf(stderr, \"Error: Fail to read from rpc_buffer\\n\");");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "uint32_t val = ntohl(packed_val);");
 
     emitter_open_block(emitter, "if (val > 1) ");
     emitter_writeln(emitter, "fprintf(stderr, \"Error: Invalid serialized boolean value.\\n\");");
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "*out = (val == 1);");
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
 
     emitter_close_block(emitter, "");
     return 1;
@@ -305,18 +310,14 @@ static int generate_rpc_serialize_string(Emitter *emitter)
     emitter_writeln(emitter, "int rpc_serialize_string(RpcBuffer *buf, const char *str)");
     emitter_open_block(emitter, "");
 
-    emitter_writeln(emitter, "if (!buf || !str) return 0;");
-    emitter_writeln(emitter, "size_t str_len = strlen(str);");
-    emitter_open_block(emitter, "if (str_len > UINT32_MAX)");
-    emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "uint32_t len = (uint32_t)str_len;");
+    emitter_writeln(emitter, "if (!buf || !str) return -1;");
+    emitter_writeln(emitter, "uint32_t len = (uint32_t)strlen(str);");
     emitter_writeln(emitter, "uint32_t packed_len = htonl(len); // Convert to network byte order");
     emitter_writeln(emitter, "");
     emitter_writeln(emitter, "// Ensure capacity for: sizeof(len) + len");
     emitter_writeln(emitter, "size_t total_needed = sizeof(uint32_t) + len;");
     emitter_open_block(emitter, "if (!rpc_buffer_ensure_capacity(buf, total_needed))");
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
     emitter_writeln(emitter, "");
     emitter_writeln(emitter, "// Copy the length prefix");
@@ -327,7 +328,7 @@ static int generate_rpc_serialize_string(Emitter *emitter)
     emitter_writeln(emitter, "memcpy(buf->data + buf->length, str, len);");
     emitter_writeln(emitter, "");
     emitter_writeln(emitter, "buf->length += len;");
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
     
     emitter_close_block(emitter, "");
     return 1;
@@ -342,16 +343,15 @@ static int generate_rpc_deserialize_string(Emitter *emitter)
 
     emitter_open_block(emitter, "");
 
-    emitter_writeln(emitter, "if (!buf || !out) return 0;");
+    emitter_writeln(emitter, "if (!buf || !out) return -1;");
     emitter_writeln(emitter, "*out = NULL;");
     emitter_writeln(emitter, "uint32_t packed_len;");
 
     emitter_open_block(
         emitter,
-        "if (!rpc_buffer_read_primitive("
-        "buf, &packed_len, sizeof(packed_len)))"
+        "if (!rpc_buffer_read_packed_val(buf, &packed_len, sizeof(packed_len)))"
     );
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "uint32_t len = ntohl(packed_len);");
@@ -359,38 +359,29 @@ static int generate_rpc_deserialize_string(Emitter *emitter)
     emitter_open_block(
         emitter,
         "if (buf->position > buf->length || "
-        "(size_t)len > buf->length - buf->position)"
+        "len > buf->length - buf->position)"
     );
-    emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
-
-    emitter_open_block(
-        emitter,
-        "if (len == UINT32_MAX)"
-    );
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(
         emitter,
-        "char *str = malloc((size_t)len + 1);"
+        "char *str = malloc(len + 1);"
     );
 
-    emitter_open_block(emitter, "if (!str)");
-    emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
-
+    emitter_writeln(emitter, "if (!str) return -1;");
+    
     emitter_open_block(
         emitter,
-        "if (!rpc_buffer_read_primitive(buf, str, len))"
+        "if (!rpc_buffer_read_packed_val(buf, str, len))"
     );
     emitter_writeln(emitter, "free(str);");
-    emitter_writeln(emitter, "return 0;");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "str[len] = '\\0';");
     emitter_writeln(emitter, "*out = str;");
-    emitter_writeln(emitter, "return 1;");
+    emitter_writeln(emitter, "return 0;");
 
     emitter_close_block(emitter, "");
     return 1;
@@ -424,16 +415,17 @@ int generate_sb_header_file(Emitter *emitter)
     emitter_writeln(emitter, "");
 
     emitter_writeln(emitter, "void rpc_buffer_free(RpcBuffer *);");
+    emitter_writeln(emitter, "int rpc_buffer_ensure_capacity(RpcBuffer *, size_t);");
     emitter_writeln(emitter, "int rpc_serialize_u32(RpcBuffer *, uint32_t);");
     emitter_writeln(emitter, "int rpc_serialize_i32(RpcBuffer *, int32_t);");
     emitter_writeln(emitter, "int rpc_serialize_bool(RpcBuffer *, bool);");
     emitter_writeln(emitter, "int rpc_serialize_string(RpcBuffer *, const char *);");
 
     // deserialization methods
-    emitter_writeln(emitter, "int rpc_deserialize_u32(uint32_t packed_val, uint32_t *out);");
-    emitter_writeln(emitter, "int rpc_deserialize_i32(uint32_t packed_val, int32_t *out);");
-    emitter_writeln(emitter, "int rpc_deserialize_bool(uint32_t packed_val, bool *out);");
-    emitter_writeln(emitter, "int rpc_deserialize_string(RpcBuffer *buf, char **out);");
+    emitter_writeln(emitter, "int rpc_deserialize_u32(RpcBuffer *, uint32_t *);");
+    emitter_writeln(emitter, "int rpc_deserialize_i32(RpcBuffer *, int32_t *);");
+    emitter_writeln(emitter, "int rpc_deserialize_bool(RpcBuffer *, bool *);");
+    emitter_writeln(emitter, "int rpc_deserialize_string(RpcBuffer *buf, char **);");
     
 
     emitter_writeln(emitter, "");
@@ -445,9 +437,9 @@ int generate_sb_header_file(Emitter *emitter)
     emitter_writeln(emitter, "");
     generate_ensure_capacity(emitter);
     emitter_writeln(emitter, "");
-    generate_rpc_append_primitive(emitter);
+    generate_rpc_append_packed_val(emitter);
     emitter_writeln(emitter, "");
-    generate_rpc_read_primitive(emitter);
+    generate_rpc_read_packed_val(emitter);
     emitter_writeln(emitter, "");
     generate_rpc_serialize_u32(emitter);
     emitter_writeln(emitter, "");
@@ -472,3 +464,4 @@ int generate_sb_header_file(Emitter *emitter)
 
     return 1;
 }
+

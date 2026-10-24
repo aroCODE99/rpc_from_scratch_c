@@ -26,8 +26,6 @@ static int generate_method(Emitter *emitter, Service *service, Method* method)
         log_error("Invalid type");
         return 0;
     }
-    emitter_write(emitter, " ");
-
     generate_method_name(emitter, service, method);
     emitter_write(emitter, "(");
 
@@ -57,7 +55,6 @@ static void generate_server_constants(Emitter *emitter)
     emitter_writeln(emitter, "#define SERVER_PORT \"9090\"");
     emitter_writeln(emitter, "");
 }
-
 
 static void generate_get_bind_socket_fn(Emitter *emitter)
 {
@@ -192,7 +189,7 @@ static int generate_method_call(Emitter *emitter, Service *service, Method *meth
         return 0;
     }
 
-    emitter_write(emitter, " result = ");
+    emitter_write(emitter, "result = ");
 
     generate_method_name(emitter, service, method);
 
@@ -219,9 +216,8 @@ static int generate_send_response(Emitter *emitter, Method *method)
     case INT32:
         emitter_open_block(
             emitter,
-            "if (!rpc_serialize_i32(&buffer, result)) "
+            "if (rpc_serialize_i32(&buffer, result) < 0) "
         );
-
         emitter_writeln(
             emitter,
             "fprintf(stderr, \"Failed to serialize result\\n\");"
@@ -236,7 +232,7 @@ static int generate_send_response(Emitter *emitter, Method *method)
     case BOOL:
         emitter_open_block(
             emitter,
-            "if (!rpc_serialize_bool(&buffer, result)) "
+            "if (rpc_serialize_bool(&buffer, result) < 0) "
         );
         emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
         emitter_writeln(
@@ -248,7 +244,21 @@ static int generate_send_response(Emitter *emitter, Method *method)
 
         emitter_close_block(emitter, "");
         break;
+    case STRING:
+        emitter_open_block(
+            emitter,
+            "if (rpc_serialize_string(&buffer, result) < 0) "
+        );
+        emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+        emitter_writeln(
+            emitter,
+            "fprintf(stderr, \"Failed to serialize result\\n\");"
+        );
+        emitter_writeln(emitter, "close(%s);", CLIENTFD);
+        emitter_writeln(emitter, "continue;");
 
+        emitter_close_block(emitter, "");
+        break;
     case UNKNOWN:
     default:
         log_error("Unsupported RPC return type");
@@ -263,7 +273,16 @@ static int generate_dispatch(Emitter *emitter, Service *service)
 {
     const char *method_id = "method_id";
     emitter_writeln(emitter, "uint32_t %s;", method_id);
-    generate_get_fn(emitter, method_id, UINT32);
+    
+    emitter_open_block(emitter, "if (rpc_deserialize_u32(&buffer, &%s) < 0) ", method_id);
+    
+    emitter_writeln(
+        emitter,
+        "fprintf(stderr, \"Error: failed to accept client connection: %%s\\n\", strerror(errno));"
+    );
+    emitter_writeln(emitter, "continue;");
+    emitter_close_block(emitter, "");
+    
     emitter_writeln(emitter, "");
 
     emitter_open_block(emitter, "switch (%s) ", method_id);
@@ -285,15 +304,16 @@ static int generate_dispatch(Emitter *emitter, Service *service)
         // generating the parameter for that calling method
         for (size_t j = 0; j < method->parameters.total; ++j) {
             Parameter *parameter = method->parameters.items[j];
-
-            if (!generate_type(emitter, parameter->type)) {
+            if (!generate_variable_declaration(emitter, parameter->type, parameter->name)) {
                 log_error("Invalid return type");
                 return 0;
             }
-            emitter_write(emitter, " ");
-            emitter_write_token(emitter, parameter->name);
-            emitter_writeln(emitter, ";");
-            generate_get_fn_token(emitter, parameter->name, parameter->type);
+            if (!generate_rpc_deserialize_method_token(emitter, parameter->type, parameter->name)) {
+                log_error("Failed to generate the rpc_deserialize_method_token");
+                return 0;
+            }
+            emitter_writeln(emitter, "continue;");
+            emitter_close_block(emitter, "");
         }
 
         /*
@@ -301,6 +321,13 @@ static int generate_dispatch(Emitter *emitter, Service *service)
           and generating the method callp
          */
         generate_method_call(emitter, service, method);
+        
+        emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+
+        if (!generate_total_len(emitter, method, false, true)) {
+            return 0;
+        }
+        generate_rpc_serialize_method(emitter, "uint32_t", "total_len");
         
         generate_send_response(emitter, method);
 
@@ -375,11 +402,22 @@ static int generate_server_main(Emitter *emitter, Service *service)
 
     emitter_open_block(emitter, "if (%s == -1) ", CLIENTFD);
 
-    emitter_writeln(emitter, "perror(\"accept\");");
+    emitter_writeln(
+        emitter,
+        "fprintf(stderr, \"error: failed to accept client connection: %%s\\n\", strerror(errno));"
+    );
     emitter_writeln(emitter, "continue;");
 
     emitter_close_block(emitter, "");
 
+    emitter_open_block(emitter, "if (recv_rpc_buffer(fd, &buffer) < 0) ");
+    emitter_writeln(
+        emitter,
+        "fprintf(stderr, \"error: failed to recv the rpc_buffer: %%s\\n\", strerror(errno));"
+    );
+    emitter_writeln(emitter, "continue;");
+    emitter_close_block(emitter, "");
+    
     emitter_writeln(emitter, "");
 
     emitter_writeln(emitter, "/* RPC request handling */");
@@ -389,6 +427,8 @@ static int generate_server_main(Emitter *emitter, Service *service)
     }
 
     emitter_writeln(emitter, "");
+    
+    emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
     emitter_writeln(emitter, "close(%s);", CLIENTFD);
 
     emitter_close_block(emitter, "");

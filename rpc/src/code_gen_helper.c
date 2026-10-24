@@ -1,89 +1,38 @@
 #include "../include/code_gen_helper.h"
 
-static int generate_get_packed_val(Emitter *emitter)
+static int generate_recv_rpc_buffer(Emitter *emitter)
 {
-    emitter_writeln(emitter, "static uint32_t get_packed_val(int sockfd, uint32_t *packed_val)");
-    emitter_open_block(emitter, "");
-    emitter_writeln(emitter, "if (!packed_val) return -1;");
+    emitter_writeln(emitter, "int recv_rpc_buffer(int sockfd, RpcBuffer *buffer)");
     
-    emitter_open_block(emitter, "if (recv_all(sockfd, packed_val, sizeof(*packed_val)) <= 0) ");
-    emitter_writeln(emitter, "fprintf(stderr, \"Error: Failed to recv all bytes\\n\");");
+    emitter_open_block(emitter, "");
+    emitter_writeln(emitter, "uint32_t network_length;");
+    
+    emitter_open_block(emitter, "if (!buffer) ");
+    emitter_writeln(emitter, "fprintf(stderr, \"Error: RPC buffer cannot be NULL.\\n\");");
     emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
-    emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "");
-    return 1;
-}
-
-static int generate_get_u32(Emitter *emitter)
-{
-    emitter_writeln(emitter, "int get_u32(int sockfd, uint32_t *out)");
-    
-    emitter_open_block(emitter, "");
-    emitter_writeln(emitter, "uint32_t packed_val;");
-    emitter_open_block(emitter, "if (get_packed_val(sockfd, &packed_val) < 0) ");
-    emitter_writeln(emitter, "return 0;");
+    emitter_open_block(emitter, "if (recv_all(sockfd, &network_length, sizeof(network_length)) < 0) ");
+    emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
 
-    emitter_open_block(emitter, "if (!rpc_deserialize_u32(packed_val, out)) ");
+    emitter_writeln(emitter, "uint32_t payload_length = ntohl(network_length);");
+    emitter_open_block(emitter, "if (!rpc_buffer_ensure_capacity(buffer, payload_length)) ");
     emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
     
-    emitter_writeln(emitter, "return 0;");    
-    emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "");
-    return 1;
-}
-
-static int generate_get_i32(Emitter *emitter)
-{
-    emitter_writeln(emitter, "int get_i32(int sockfd, int32_t *out)");
-    
-    emitter_open_block(emitter, "");
-    emitter_writeln(emitter, "uint32_t packed_val;");
-    emitter_open_block(emitter, "if (get_packed_val(sockfd, &packed_val) < 0) ");
-    emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
-
-    emitter_open_block(emitter, "if (!rpc_deserialize_i32(packed_val, out)) ");
+    emitter_open_block(emitter, "if (recv_all(sockfd, buffer->data, payload_length) < 0) ");
     emitter_writeln(emitter, "return -1;");
     emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "return 0;");    
-    emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "");
-    return 1;
-}
 
-static int generate_get_bool(Emitter *emitter)
-{
-    emitter_writeln(emitter, "int get_bool(int sockfd, bool *out)");
-    
-    emitter_open_block(emitter, "");
-    emitter_writeln(emitter, "uint32_t packed_val;");
-    emitter_open_block(emitter, "if (get_packed_val(sockfd, &packed_val) < 0) ");
+    emitter_writeln(emitter, "buffer->length = payload_length;");
+    emitter_writeln(emitter, "buffer->position = 0;");
+
     emitter_writeln(emitter, "return 0;");
-    emitter_close_block(emitter, "");
 
-    emitter_open_block(emitter, "if (!rpc_deserialize_bool(packed_val, out)) ");
-    emitter_writeln(emitter, "return -1;");
-    emitter_close_block(emitter, "");
-    
-    emitter_writeln(emitter, "return 0;");
     emitter_close_block(emitter, "");
     emitter_writeln(emitter, "");
-    return 1;
-}
-
-static int generate_get_string(Emitter *emitter)
-{
-    emitter_writeln(emitter, "int get_string(int sockfd, const char *out)");
     
-    emitter_open_block(emitter, "");
-    emitter_writeln(emitter, "return 1;");
-    emitter_close_block(emitter, "");
-    emitter_writeln(emitter, "");
     return 1;
 }
 
@@ -204,45 +153,26 @@ int generate_rpc_helper_file(Emitter *emitter)
     emitter_close_block(emitter, " RpcClient;");
     emitter_writeln(emitter, "");
 
+    emitter_writeln(emitter, "int recv_rpc_buffer(int, RpcBuffer *);");
     emitter_writeln(emitter, "int send_all(int, RpcBuffer *);");
     emitter_writeln(emitter, "int recv_all(int, void *, uint32_t);");
-    emitter_writeln(emitter, "int get_u32(int, uint32_t *);");
-    emitter_writeln(emitter, "int get_i32(int, int32_t *);");
-    emitter_writeln(emitter, "int get_bool(int, bool *);");
-    emitter_writeln(emitter, "int get_string(int, const char *);");
     
     emitter_writeln(emitter, "");
 
     emitter_writeln(emitter, "#ifdef RPC_HELPER_IMPLEMENTATION");
     emitter_writeln(emitter, "");
-    
-    
-    if (!generate_get_packed_val(emitter)) {
-        return 0;
-    }
-    
-    if (!generate_get_u32(emitter)) {
+
+    // recv_rpc_buffer method
+    if (!generate_recv_rpc_buffer(emitter)) {
         return 0;
     }
 
-    if (!generate_get_i32(emitter)) {
-        return 0;
-    }
-    
-    if (!generate_get_bool(emitter)) {
-        return 0;
-    }
-    
-    if (!generate_get_string(emitter)) {
-        return 0;
-    }
-
-    // recv_all method
-
+    // send_all method
     if (!generate_send_all_fn(emitter)) {
         return 0;
     }
 
+    // recv_all method
     if (!generate_recv_all_fn(emitter)) {
         return 0;
     }

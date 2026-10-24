@@ -191,6 +191,7 @@ static int generate_get_socket_fn(Emitter *emitter)
 
     emitter_writeln(emitter, "");
 
+
     emitter_writeln(
         emitter,
         "freeaddrinfo(server_info);"
@@ -298,8 +299,6 @@ static int generate_rpc_method(Emitter *emitter, Service *service, size_t method
         return 0;
     }
 
-    emitter_write(emitter, " ");
-    
     if (!generate_method_name(emitter, service, method)) {
         log_error("Error generating the method_name");
         return 0;
@@ -314,25 +313,41 @@ static int generate_rpc_method(Emitter *emitter, Service *service, size_t method
     emitter_writeln(emitter, "// RPC client call");
     emitter_writeln(emitter, "RpcBuffer buffer = {0};");
     emitter_writeln(emitter, "uint32_t method_id = %zu;", method_id);
+    if (!generate_total_len(emitter, method, true, false)) {
+        return 0;
+    }
     // now the method_id is going to be same for all client call
-    generate_rpc_serialize_method(emitter, "size_t", "method_id");
+    generate_rpc_serialize_method(emitter, "uint32_t", "total_len");
+    generate_rpc_serialize_method(emitter, "uint32_t", "method_id");
     for (size_t  i = 0; i < method->parameters.total; ++i) {
         Parameter *curr_param = method->parameters.items[i];
         generate_rpc_serialize_method_token(emitter, curr_param->type, curr_param->name);
     }
 
-    emitter_open_block(emitter, "if (send_all(fd, &buffer) <= 0) ");
+    emitter_open_block(emitter, "if (send_all(fd, &buffer) < 0) ");
     emitter_writeln(emitter, "fprintf (stderr, \"Error: failed to send to the server\\n\");");
     emitter_writeln(emitter, "exit(%zu);", EXIT_69); // TODO: better exit statuses
     emitter_close_block(emitter, "");
 
     emitter_writeln(emitter, "rpc_buffer_free(&buffer);");
+
+    emitter_open_block(emitter, "if (recv_rpc_buffer(fd, &buffer) < 0) ");
+    emitter_writeln(emitter, "exit(%zu);", EXIT_69);
+    emitter_close_block(emitter, "");
+    
     if (!generate_type(emitter, method->return_type)) {
         log_error("Error generating the return_type");
         return 0;
     }
-    emitter_writeln(emitter, " res;");
-    generate_get_fn(emitter, "res", classify_type(method->return_type));
+    emitter_writeln(emitter, "res;");
+
+    if (!generate_rpc_deserialize_method(emitter, method->return_type, "res")) {
+        log_error("Error generating the rpc_deserialize_methods");
+        return 1;
+    }
+    emitter_writeln(emitter, "exit(%zu);", EXIT_69);
+    emitter_close_block(emitter, "");
+    
     emitter_writeln(emitter, "return res;");
     emitter_close_block(emitter, "");
 

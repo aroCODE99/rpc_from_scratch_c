@@ -57,13 +57,17 @@ CType classify_ctype(const char *);
 RpcType classify_type(Token);
 const char *get_c_type(RpcType);
 const char *get_rpc_type_string(RpcType);
+int generate_variable_declaration(Emitter *, Token, Token);
 int generate_type(Emitter *, Token);
 int generate_method_name(Emitter *, Service *service, Method *method);
 int generate_parameter(Emitter *, Parameter *);
 int generate_rpc_serialize_method(Emitter *, const char *, const char *);
 int generate_rpc_serialize_method_token(Emitter *, Token, Token);
-int generate_rpc_deserialize_method_token(Emitter *, Token);
+int generate_rpc_deserialize_method(Emitter *, Token, const char *);
+int generate_rpc_deserialize_method_token(Emitter *, Token, Token);
 int generate_send_all_fn(Emitter *emitter);
 int generate_recv_all_fn(Emitter *emitter);
 const char *get_default_value(Method *method);
+int generate_total_len(Emitter *, Method *, bool, bool);
+
 #endif

@@ -51,10 +51,10 @@ int generate_type(Emitter *emitter, Token type)
 {
     switch (classify_type(type)) {
     case INT32:
-        emitter_write(emitter, "int32_t");
+        emitter_write(emitter, "int32_t ");
         return 1;
     case BOOL:
-        emitter_write(emitter, "bool");
+        emitter_write(emitter, "bool ");
         return 1;
     case STRING:
         emitter_write(emitter, "char *");
@@ -64,6 +64,16 @@ int generate_type(Emitter *emitter, Token type)
         log_error("Unknown type '%.*s'", type.length, type.start);
         return 0;
     }
+}
+
+int generate_variable_declaration(Emitter *emitter, Token type, Token name)
+{
+    if (!generate_type(emitter, type)) {
+        return 0;
+    }
+    emitter_write_token(emitter, name);
+    emitter_writeln(emitter, ";");
+    return 1;
 }
 
 RpcType classify_type(Token type)
@@ -118,7 +128,6 @@ int generate_parameter(Emitter *emitter, Parameter *parameter)
         log_error("Invalid Type");
         return 0;
     }
-    emitter_write(emitter, " ");
     emitter_write_token(emitter, parameter->name);
     return 1;
 }
@@ -148,18 +157,39 @@ static bool token_match(Token tok, const char *type)
     return strncmp(tok.start, type, tok.length) == 0;
 }
 
-int generate_rpc_deserialize_method_token(Emitter *emitter, Token type)
+/*
+  you still need to close the block and the add the termination expr
+ */
+int generate_rpc_deserialize_method(Emitter *emitter, Token type, const char *name)
 {
     if (token_match(type, "int32")) {
-        emitter_writeln(emitter, "rpc_deserialize_i32(&buffer, &res);");
+        emitter_open_block(emitter, "if (rpc_deserialize_i32(&buffer, &%s) < 0) ", name);
     } else if (token_match(type, "uint32")) {
-        emitter_writeln(emitter, "rpc_deserialize_u32(&buffer, &res);");
+        emitter_open_block(emitter, "if (rpc_deserialize_u32(&buffer, &%s) < 0) ", name);
     } else if (token_match(type, "string")) {
-        emitter_writeln(emitter, "rpc_deserialize_string(&buffer, &res);");
+        emitter_open_block(emitter, "if (rpc_deserialize_string(&buffer, &%s) < 0) ", name);
     } else if (token_match(type, "bool")) {
-        emitter_writeln(emitter, "rpc_deserialize_bool(&buffer, &res);");
-    } else return 0;
+        emitter_open_block(emitter, "if (rpc_deserialize_bool(&buffer, &%s) < 0) ", name);
+    } else {
+        return 0;
+    }
+
+    emitter_writeln(
+        emitter,
+        "fprintf(stderr, \"Error: failed to deserialize parameter %s\\n\");",
+        name
+    );
+
     return 1;
+}
+
+int generate_rpc_deserialize_method_token(Emitter *emitter, Token type, Token name)
+{
+    char name_str[name.length + 1];
+    memcpy(name_str, name.start, name.length);
+    name_str[name.length] = '\0';
+
+    return generate_rpc_deserialize_method(emitter, type, name_str);
 }
 
 // matches the rpc_types
@@ -314,7 +344,6 @@ void generate_get_fn(Emitter *emitter, const char *name, RpcType type)
     case UINT32: fn = "get_u32";   break;
     case BOOL:   fn = "get_bool";  break;
     case STRING: fn = "get_string"; break;
-
     default:
         log_error("Error: Unknown type");
         return;
@@ -340,9 +369,53 @@ void generate_get_fn(Emitter *emitter, const char *name, RpcType type)
 void generate_get_fn_token(Emitter *emitter, Token name, Token type)
 {
     char name_buf[name.length + 1];
-
     memcpy(name_buf, name.start, name.length);
     name_buf[name.length] = '\0';
-
     generate_get_fn(emitter, name_buf, classify_type(type));
+}
+
+
+static void generate_serialized_size(Emitter *emitter, Parameter *parameter, bool returns)
+{
+    switch (classify_type(parameter->type)) {
+    case INT32:
+    case UINT32:
+    case BOOL:
+        emitter_write(emitter, "sizeof(uint32_t)");
+        break;
+    case STRING:
+        if (returns) emitter_write(emitter, "sizeof(uint32_t) + strlen(result)");
+        else {
+            emitter_write(
+                emitter,
+                "sizeof(uint32_t) + strlen(%.*s)",
+                parameter->name.length,
+                parameter->name.start
+            );
+        }
+        break;
+    default:
+        log_error("Error: Unknown type");
+    }
+}
+
+// TODO: replace the 'Method *method' with the Token name, Token type
+int generate_total_len(Emitter *emitter, Method *method, bool client, bool returns)
+{
+    // [4-byte payload length][method_id][Args]
+    // [string length][string bytes]...
+    emitter_write(emitter, "uint32_t total_len = ");
+
+    if (client) {
+        emitter_write(emitter, "sizeof(method_id) + ");
+    }
+
+    for (size_t i = 0; i < method->parameters.total; ++i) {
+        Parameter *curr_param = method->parameters.items[i];
+        if (i > 0) emitter_write(emitter, " + ");
+        generate_serialized_size(emitter, curr_param, returns);
+    }
+
+    emitter_writeln(emitter, ";");
+    return 1;
 }
